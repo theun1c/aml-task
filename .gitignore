@@ -1,2 +1,3 @@
+# just base ignore for TS/JS files 
 .env
 node_modules/
