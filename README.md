@@ -35,5 +35,18 @@
 
 ## Структура проекта
 
+Текущая архитектура проекта (набросок): 
+``` 
+├── README.md 
+├── frontend/
+│ └── React/
+├── backend/
+│ └── NestJS/
+├── docs/
+├── docker-compose.yml
+├── .env.example
+└── .gitignore
+```
 
 ## Паттерн разработки
+
