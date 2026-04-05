@@ -1,7 +1,7 @@
 # BACKEND_TASKS.md
 
 ## Статус проекта
-- [ ] Инициализация backend-проекта
+- [x] Инициализация backend-проекта
 - [ ] База данных и Prisma
 - [ ] Auth
 - [ ] Users
