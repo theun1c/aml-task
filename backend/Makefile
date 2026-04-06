@@ -14,3 +14,6 @@ pull:
 
 generate: 
 	npx prisma generate 
+
+devrun:
+	npm run start:dev
