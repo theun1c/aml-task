@@ -1,5 +1,5 @@
 services:
-  postgres: 
+  postgres:
     image: postgres:16-alpine
     container_name: aml_postgres_db
     restart: unless-stopped
@@ -10,11 +10,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432" # host:container
+      - '${POSTGRES_PORT:-5432}:5432' # host:container
     volumes:
-      - postgres_data:/var/lib/postgresql/data 
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aml_user -d aml_db"]
+      test: ['CMD-SHELL', 'pg_isready -U aml_user -d aml_db']
       interval: 5s
       timeout: 3s
       retries: 10
