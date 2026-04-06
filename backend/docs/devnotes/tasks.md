@@ -23,7 +23,7 @@
 - [x] Создать NestJS-проект
 - [x] Настроить базовую структуру директорий
 - [x] Настроить env-файлы
-- [ ] Подключить ConfigModule
+- [x] Подключить ConfigModule
 - [x] Настроить eslint / prettier
 - [x] Настроить Docker Compose для PostgreSQL
 - [x] Проверить локальный запуск проекта
