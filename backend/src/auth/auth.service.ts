@@ -1,12 +1,36 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { UserDto } from './dto/user.dto';
+import { RegisterDto } from './dto/register.dto';
+
+// ### `POST /auth/register`
+// Request:
+// ```json
+// {
+//   "email": "user@example.com",
+//   "password": "strongPass123",
+//   "name": "Alex"
+// }
+// ```
+// Response `201`:
+// ```json
+// {
+//   "accessToken": "<jwt>",
+//   "refreshToken": "<jwt>",
+//   "user": {
+//     "id": "uuid",
+//     "email": "user@example.com",
+//     "name": "Alex"
+//   }
+// }
+// ```
 
 @Injectable()
 export class AuthService {
   constructor(private prisma: PrismaService) {}
 
-  async getAllUsers(): Promise<UserDto[]> {
-    return this.prisma.users.findMany();
+  
+
+  async register(dto: RegisterDto) {
+    
   }
 }
