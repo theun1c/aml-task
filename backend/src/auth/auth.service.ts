@@ -54,11 +54,10 @@ export class AuthService {
       },
     });
 
-    const userResponse: UserResponse = {
-      id: createdUser.id,
-      email: createdUser.email,
-      name: createdUser.name,
-    };
+    const userResponse = new UserResponse();
+    userResponse.id = createdUser.id;
+    userResponse.email = createdUser.email;
+    userResponse.name = createdUser.name;
 
     const accessToken = 'test access' + Date.now();
     const refreshToken = 'test refresh' + Date.now();
