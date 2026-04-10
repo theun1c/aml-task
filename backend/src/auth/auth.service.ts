@@ -33,7 +33,7 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const emailNormalized = dto.email.trim().toLowerCase();
 
-    const existingUser = await this.prisma.users.findFirst({
+    const existingUser = await this.prisma.users.findUnique({
       where: {
         email: emailNormalized,
       },
@@ -61,6 +61,19 @@ export class AuthService {
 
     const accessToken = 'test access' + Date.now();
     const refreshToken = 'test refresh' + Date.now();
+
+    const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const session = await this.prisma.sessions.create({
+      data: {
+        user_id: userResponse.id,
+        refresh_token_hash: refreshTokenHash,
+        expires_at: expiresAt,
+      },
+    });
 
     return {
       accessToken: accessToken,
