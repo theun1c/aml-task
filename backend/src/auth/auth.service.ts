@@ -50,7 +50,7 @@ export class AuthService {
       data: {
         email: emailNormalized,
         password_hash: passwordHash,
-        name: dto.name,
+        name: dto.name.trim(),
       },
     });
 
