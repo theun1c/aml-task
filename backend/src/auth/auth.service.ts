@@ -276,4 +276,25 @@ export class AuthService {
       },
     });
   }
+
+  async getSessions(userId: string) {
+    return this.prisma.sessions.findMany({
+      where: {
+        user_id: userId,
+        revoked_at: null,
+        expires_at: {
+          gt: new Date(), // ?
+        },
+      },
+      select: {
+        id: true,
+        created_at: true,
+        expires_at: true,
+        revoked_at: true,
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+  }
 }

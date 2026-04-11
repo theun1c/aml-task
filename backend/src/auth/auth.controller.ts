@@ -43,5 +43,10 @@ export class AuthController {
     await this.authService.logoutAllSessions(req.user.id);
     return { success: true };
   }
-  
+
+  @UseGuards(JwtAuthGuard)
+  @Get('/sessions')
+  getSessions(@Req() req: any) {
+    return this.authService.getSessions(req.user.id);
+  }
 }
