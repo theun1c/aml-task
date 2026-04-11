@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { UserResponse } from './types/user.response';
+import { LoginDto } from './dto/login.dto';
 
 // ### `POST /auth/register`
 // Request:
@@ -80,5 +81,9 @@ export class AuthService {
       refreshToken: refreshToken,
       user: userResponse,
     };
+  }
+
+  async login(dto: LoginDto) {
+
   }
 }
