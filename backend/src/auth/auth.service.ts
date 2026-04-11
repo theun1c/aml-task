@@ -96,15 +96,32 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const validPassword = bcrypt.compare(dto.password, user.password_hash);
+    const validPassword = await bcrypt.compare(dto.password, user.password_hash);
 
     if (!validPassword) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const accessToken = 'test access' + Date.now();
+    const refreshToken = 'test refresh' + Date.now();
+
+    const SALT_ROUNDS = 8;
+    const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const session = await this.prisma.sessions.create({
+      data: {
+        user_id: user.id,
+        refresh_token_hash: refreshTokenHash,
+        expires_at: expiresAt,
+      },
+    });
+
     return {
-      accessToken: 'test access token',
-      refreshToken: 'test refresh token',
+      accessToken: accessToken,
+      refreshToken: refreshToken,
       user: {
         id: user.id,
         email: user.email,
