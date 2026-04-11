@@ -4,6 +4,8 @@ import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { UserResponse } from './types/user.response';
 import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
+import { TokensResponse } from './types/tokens.response';
 
 const SALT_ROUNDS = 8;
 
@@ -142,5 +144,11 @@ export class AuthService {
 
     const userResponse = this.toUserResponse(user.id, user.email, user.name);
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
+  }
+
+  // BL
+  // REFRESH
+  async refresh(dto: RefreshDto): Promise<TokensResponse> {
+    const incomingRefreshToken = dto.refreshToken;
   }
 }
