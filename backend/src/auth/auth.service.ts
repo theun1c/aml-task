@@ -7,8 +7,6 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TokensResponse } from './types/tokens.response';
 import { TokenService } from './token.service';
-import { use } from 'passport';
-import { ref } from 'process';
 
 const SALT_ROUNDS = 8;
 
@@ -175,17 +173,74 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const { accessToken, refreshToken } = this.generateMockTokens();
-
-    const session = await this.createSession(refreshToken, user.id);
+    const { accessToken, refreshToken } = await this.issueTokensForUser({
+      id: user.id,
+      email: user.email,
+    });
 
     const userResponse = this.toUserResponse(user.id, user.email, user.name);
+
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
 
-  // // BL
-  // // REFRESH
-  // async refresh(dto: RefreshDto): Promise<TokensResponse> {
-  //   const incomingRefreshToken = dto.refreshToken;
-  // }
+  // BL
+  // REFRESH
+  async refresh(dto: RefreshDto): Promise<TokensResponse> {
+    const incomingRefreshToken = dto.refreshToken;
+
+    let payload;
+    try {
+      payload = await this.tokenService.verifyRefreshToken(incomingRefreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const session = await this.prisma.sessions.findUnique({
+      where: {
+        id: payload.sid,
+      },
+      include: {
+        users: true,
+      },
+    });
+
+    if (!session) {
+      throw new UnauthorizedException('Session not found');
+    }
+
+    if (session.revoked_at) {
+      throw new UnauthorizedException('Session revoked');
+    }
+
+    if (session.expires_at <= new Date()) {
+      throw new UnauthorizedException('Session expired');
+    }
+
+    const isRefreshTokenValid = await bcrypt.compare(
+      incomingRefreshToken,
+      session.refresh_token_hash,
+    );
+
+    if (!isRefreshTokenValid) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const accessToken = await this.tokenService.generateAccessToken({
+      sub: session.users.id,
+      sid: session.id,
+      email: session.users.email,
+    });
+
+    const refreshToken = await this.tokenService.generateRefreshToken({
+      sub: session.users.id,
+      sid: session.id,
+    });
+
+    await this.updateSessionRefreshToken(session.id, refreshToken);
+
+    return {
+      accessToken,
+      refreshToken,
+    };
+  }
 }
