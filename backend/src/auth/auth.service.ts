@@ -41,6 +41,9 @@ export class AuthService {
     };
   }
 
+  // HELPFUL
+  // createSession
+  // for session creation
   private async createSession(refreshToken: string, id: string) {
     const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
 
@@ -58,6 +61,34 @@ export class AuthService {
     return session;
   }
 
+  // HELPFUL
+  // createUser
+  // for user creation
+  private async createUser(email: string, password: string, name: string) {
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const trimmedName = name.trim();
+
+    const createdUser = await this.prisma.users.create({
+      data: {
+        email: email,
+        password_hash: passwordHash,
+        name: trimmedName,
+      },
+    });
+
+    return createdUser;
+  }
+
+  // HELPFUL
+  // generateMockTokens
+  // for tokens generator
+  private generateMockTokens(): { accessToken: string; refreshToken: string } {
+    return {
+      accessToken: 'access_' + Date.now(),
+      refreshToken: 'refresh_' + Date.now(),
+    };
+  }
+
   // BL
   // REGISTER
   async register(dto: RegisterDto) {
@@ -73,20 +104,11 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
-
-    const createdUser = await this.prisma.users.create({
-      data: {
-        email: emailNormalized,
-        password_hash: passwordHash,
-        name: dto.name.trim(),
-      },
-    });
+    const createdUser = await this.createUser(existingUser.email, dto.password, existingUser.name);
 
     const userResponse = this.toUserResponse(createdUser.id, createdUser.email, createdUser.name);
 
-    const accessToken = 'test access' + Date.now();
-    const refreshToken = 'test refresh' + Date.now();
+    const { accessToken, refreshToken } = this.generateMockTokens();
 
     const session = this.createSession(refreshToken, userResponse.id);
 
@@ -114,8 +136,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const accessToken = 'test access' + Date.now();
-    const refreshToken = 'test refresh' + Date.now();
+    const { accessToken, refreshToken } = this.generateMockTokens();
 
     const session = this.createSession(refreshToken, user.id);
 
