@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { PrismaService } from '../prisma.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TokenService } from './token.service';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
   imports: [
@@ -18,13 +19,13 @@ import { TokenService } from './token.service';
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         signOptions: {
-          expiresIn: config.getOrThrow<string>('JWT_ACCESS_TTL', '15m') as StringValue,
+          expiresIn: config.getOrThrow<string>('JWT_ACCESS_TTL') as StringValue,
         },
       }),
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, PrismaService, TokenService, JwtService],
+  providers: [AuthService, PrismaService, TokenService, JwtStrategy],
   exports: [TokenService],
 })
 export class AuthModule {}
