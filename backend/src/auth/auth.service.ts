@@ -5,6 +5,8 @@ import * as bcrypt from 'bcrypt';
 import { UserResponse } from './types/user.response';
 import { LoginDto } from './dto/login.dto';
 
+const SALT_ROUNDS = 8;
+
 @Injectable()
 export class AuthService {
   constructor(private prisma: PrismaService) {}
@@ -39,6 +41,23 @@ export class AuthService {
     };
   }
 
+  private async createSession(refreshToken: string, id: string) {
+    const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const session = await this.prisma.sessions.create({
+      data: {
+        user_id: id,
+        refresh_token_hash: refreshTokenHash,
+        expires_at: expiresAt,
+      },
+    });
+
+    return session;
+  }
+
   // BL
   // REGISTER
   async register(dto: RegisterDto) {
@@ -54,7 +73,6 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const SALT_ROUNDS = 8;
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
 
     const createdUser = await this.prisma.users.create({
@@ -70,18 +88,7 @@ export class AuthService {
     const accessToken = 'test access' + Date.now();
     const refreshToken = 'test refresh' + Date.now();
 
-    const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    const session = await this.prisma.sessions.create({
-      data: {
-        user_id: userResponse.id,
-        refresh_token_hash: refreshTokenHash,
-        expires_at: expiresAt,
-      },
-    });
+    const session = this.createSession(refreshToken, userResponse.id);
 
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
@@ -110,19 +117,7 @@ export class AuthService {
     const accessToken = 'test access' + Date.now();
     const refreshToken = 'test refresh' + Date.now();
 
-    const SALT_ROUNDS = 8;
-    const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    const session = await this.prisma.sessions.create({
-      data: {
-        user_id: user.id,
-        refresh_token_hash: refreshTokenHash,
-        expires_at: expiresAt,
-      },
-    });
+    const session = this.createSession(refreshToken, user.id);
 
     const userResponse = this.toUserResponse(user.id, user.email, user.name);
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
