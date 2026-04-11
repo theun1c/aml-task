@@ -11,8 +11,32 @@ export class AuthService {
 
   // HELPFUL
   // emailNormalize
+  // cleanup email
   private emailNormalize(email: string): string {
     return email.trim().toLocaleLowerCase();
+  }
+
+  // HELPFUL
+  // toUserResponse
+  // map to user resp
+  private toUserResponse(id: string, email: string, name: string): UserResponse {
+    const userResponse = new UserResponse();
+    userResponse.id = id;
+    userResponse.email = email;
+    userResponse.name = name;
+
+    return userResponse;
+  }
+
+  // HELPFUL
+  // buildUserResponse
+  // for build resp
+  private buildUserResponse(accessToken: string, refreshToken: string, user: UserResponse) {
+    return {
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      user: user,
+    };
   }
 
   // BL
@@ -41,10 +65,7 @@ export class AuthService {
       },
     });
 
-    const userResponse = new UserResponse();
-    userResponse.id = createdUser.id;
-    userResponse.email = createdUser.email;
-    userResponse.name = createdUser.name;
+    const userResponse = this.toUserResponse(createdUser.id, createdUser.email, createdUser.name);
 
     const accessToken = 'test access' + Date.now();
     const refreshToken = 'test refresh' + Date.now();
@@ -62,11 +83,7 @@ export class AuthService {
       },
     });
 
-    return {
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      user: userResponse,
-    };
+    return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
 
   // BL
@@ -107,14 +124,7 @@ export class AuthService {
       },
     });
 
-    return {
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-    };
+    const userResponse = this.toUserResponse(user.id, user.email, user.name);
+    return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
 }
