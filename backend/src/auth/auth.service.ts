@@ -209,16 +209,16 @@ export class AuthService {
       },
     });
 
+    if (!session) {
+      throw new UnauthorizedException('Session not found');
+    }
+
     if (!session.users) {
       throw new UnauthorizedException('User not found');
     }
 
     if (session.user_id !== payload.sub) {
       throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    if (!session) {
-      throw new UnauthorizedException('Session not found');
     }
 
     if (session.revoked_at) {
