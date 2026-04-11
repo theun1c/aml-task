@@ -106,13 +106,13 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const createdUser = await this.createUser(existingUser.email, dto.password, existingUser.name);
+    const createdUser = await this.createUser(dto.email, dto.password, dto.name);
 
     const userResponse = this.toUserResponse(createdUser.id, createdUser.email, createdUser.name);
 
     const { accessToken, refreshToken } = this.generateMockTokens();
 
-    const session = this.createSession(refreshToken, userResponse.id);
+    const session = await this.createSession(refreshToken, userResponse.id);
 
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
@@ -140,7 +140,7 @@ export class AuthService {
 
     const { accessToken, refreshToken } = this.generateMockTokens();
 
-    const session = this.createSession(refreshToken, user.id);
+    const session = await this.createSession(refreshToken, user.id);
 
     const userResponse = this.toUserResponse(user.id, user.email, user.name);
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
