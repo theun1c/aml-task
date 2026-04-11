@@ -5,34 +5,20 @@ import * as bcrypt from 'bcrypt';
 import { UserResponse } from './types/user.response';
 import { LoginDto } from './dto/login.dto';
 
-// ### `POST /auth/register`
-// Request:
-// ```json
-// {
-//   "email": "user@example.com",
-//   "password": "strongPass123",
-//   "name": "Alex"
-// }
-// ```
-// Response `201`:
-// ```json
-// {
-//   "accessToken": "<jwt>",
-//   "refreshToken": "<jwt>",
-//   "user": {
-//     "id": "uuid",
-//     "email": "user@example.com",
-//     "name": "Alex"
-//   }
-// }
-// ```
-
 @Injectable()
 export class AuthService {
   constructor(private prisma: PrismaService) {}
 
+  // HELPFUL
+  // emailNormalize
+  private emailNormalize(email: string): string {
+    return email.trim().toLocaleLowerCase();
+  }
+
+  // BL
+  // REGISTER
   async register(dto: RegisterDto) {
-    const emailNormalized = dto.email.trim().toLowerCase();
+    const emailNormalized = this.emailNormalize(dto.email);
 
     const existingUser = await this.prisma.users.findUnique({
       where: {
@@ -83,8 +69,10 @@ export class AuthService {
     };
   }
 
+  // BL
+  // LOGIN
   async login(dto: LoginDto) {
-    const emailNormalized = dto.email.trim().toLowerCase();
+    const emailNormalized = this.emailNormalize(dto.email);
 
     const user = await this.prisma.users.findUnique({
       where: {
