@@ -46,7 +46,7 @@ export class TokenService {
 
   async verifyAccessToken(token: string): Promise<AccessTokenPayload> {
     const payload = await this.jwtService.verifyAsync<AccessTokenPayload>(token);
-
+    console.log('JWT payload in strategy:', payload);
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Invalid token type');
     }

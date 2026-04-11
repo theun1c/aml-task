@@ -6,6 +6,7 @@ import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import type { AuthenticatedUser } from './current-user.decorator';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 @Controller('auth')
 export class AuthController {
@@ -26,12 +27,14 @@ export class AuthController {
     return this.authService.refresh(dto);
   }
 
+  @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Get('/me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return user;
   }
 
+  @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Post('/logout')
   async logout(@CurrentUser() user: AuthenticatedUser) {
@@ -39,6 +42,7 @@ export class AuthController {
     return { success: true };
   }
 
+  @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Post('/logout-all')
   async logoutAll(@CurrentUser() user: AuthenticatedUser) {
@@ -46,6 +50,7 @@ export class AuthController {
     return { success: true };
   }
 
+  @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Get('/sessions')
   getSessions(@CurrentUser() user: AuthenticatedUser) {

@@ -8,7 +8,7 @@ type AccessJwtPayload = {
   sub: string;
   sid: string;
   email: string;
-  type: 'aceess';
+  type: 'access';
 };
 
 @Injectable()
@@ -25,8 +25,30 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: AccessJwtPayload) {
-    if (payload.type !== 'aceess') {
+    if (payload.type !== 'access') {
       throw new UnauthorizedException('Invalid token type');
+    }
+
+    const session = await this.prisma.sessions.findUnique({
+      where: {
+        id: payload.sid,
+      },
+    });
+
+    if (!session) {
+      throw new UnauthorizedException('Session not found');
+    }
+
+    if (session.user_id !== payload.sub) {
+      throw new UnauthorizedException('Invalid session');
+    }
+
+    if (session.revoked_at) {
+      throw new UnauthorizedException('Session revoked');
+    }
+
+    if (session.expires_at <= new Date()) {
+      throw new UnauthorizedException('Session expired');
     }
 
     const user = await this.prisma.users.findUnique({
