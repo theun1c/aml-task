@@ -251,4 +251,16 @@ export class AuthService {
       refreshToken,
     };
   }
+
+  async logoutCurrentSession(sessionId: string): Promise<void> {
+    await this.prisma.sessions.update({
+      where: {
+        id: sessionId,
+      },
+      data: {
+        revoked_at: new Date(),
+        updated_at: new Date(),
+      },
+    });
+  }
 }
