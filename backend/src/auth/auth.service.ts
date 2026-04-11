@@ -7,6 +7,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TokensResponse } from './types/tokens.response';
 import { RefreshTokenPayload, TokenService } from './token.service';
+import { createHash } from 'crypto';
 
 const SALT_ROUNDS = 8;
 
@@ -16,6 +17,10 @@ export class AuthService {
     private prisma: PrismaService,
     private tokenService: TokenService,
   ) {}
+
+  private hashRefreshToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
 
   // HELPFUL
   // emailNormalize
@@ -66,7 +71,7 @@ export class AuthService {
   }
 
   private async updateSessionRefreshToken(sessionId: string, refreshToken: string) {
-    const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
+    const refreshTokenHash = this.hashRefreshToken(refreshToken);
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
@@ -224,12 +229,9 @@ export class AuthService {
       throw new UnauthorizedException('Session expired');
     }
 
-    const isRefreshTokenValid = await bcrypt.compare(
-      incomingRefreshToken,
-      session.refresh_token_hash,
-    );
+    const incomingRefreshTokenHash = this.hashRefreshToken(incomingRefreshToken);
 
-    if (!isRefreshTokenValid) {
+    if (incomingRefreshTokenHash !== session.refresh_token_hash) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
