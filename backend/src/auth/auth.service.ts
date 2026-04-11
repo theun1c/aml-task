@@ -6,7 +6,7 @@ import { UserResponse } from './types/user.response';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TokensResponse } from './types/tokens.response';
-import { TokenService } from './token.service';
+import { RefreshTokenPayload, TokenService } from './token.service';
 
 const SALT_ROUNDS = 8;
 
@@ -188,7 +188,7 @@ export class AuthService {
   async refresh(dto: RefreshDto): Promise<TokensResponse> {
     const incomingRefreshToken = dto.refreshToken;
 
-    let payload;
+    let payload: RefreshTokenPayload;
     try {
       payload = await this.tokenService.verifyRefreshToken(incomingRefreshToken);
     } catch {

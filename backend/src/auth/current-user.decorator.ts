@@ -1,6 +1,20 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { Request } from 'express';
 
-export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext) => {
-  const request = ctx.switchToHttp().getRequest();
-  return request.user;
-});
+export type AuthenticatedUser = {
+  id: string;
+  email: string;
+  name: string;
+  sessionId: string;
+};
+
+type RequestWithUser = Request & {
+  user: AuthenticatedUser;
+};
+
+export const CurrentUser = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): AuthenticatedUser => {
+    const request = ctx.switchToHttp().getRequest<RequestWithUser>();
+    return request.user;
+  },
+);

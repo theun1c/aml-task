@@ -5,6 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
+import type { AuthenticatedUser } from './current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -27,27 +28,27 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('/me')
-  me(@Req() req: any) {
-    return req.user;
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return user;
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('/logout')
-  async logout(@CurrentUser() user: any) {
+  async logout(@CurrentUser() user: AuthenticatedUser) {
     await this.authService.logoutCurrentSession(user.sessionId);
     return { success: true };
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('/logout-all')
-  async logoutAll(@CurrentUser() user: any) {
+  async logoutAll(@CurrentUser() user: AuthenticatedUser) {
     await this.authService.logoutAllSessions(user.id);
     return { success: true };
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('/sessions')
-  getSessions(@CurrentUser() user: any) {
+  getSessions(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.getSessions(user.id);
   }
 }
