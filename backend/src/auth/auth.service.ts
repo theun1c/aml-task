@@ -6,18 +6,24 @@ import { UserResponse } from './types/user.response';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TokensResponse } from './types/tokens.response';
+import { TokenService } from './token.service';
+import { use } from 'passport';
+import { ref } from 'process';
 
 const SALT_ROUNDS = 8;
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private tokenService: TokenService,
+  ) {}
 
   // HELPFUL
   // emailNormalize
   // cleanup email
   private emailNormalize(email: string): string {
-    return email.trim().toLocaleLowerCase();
+    return email.trim().toLowerCase();
   }
 
   // HELPFUL
@@ -46,21 +52,61 @@ export class AuthService {
   // HELPFUL
   // createSession
   // for session creation
-  private async createSession(refreshToken: string, id: string) {
-    const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
-
+  private async createSession(id: string) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
     const session = await this.prisma.sessions.create({
       data: {
         user_id: id,
-        refresh_token_hash: refreshTokenHash,
+        refresh_token_hash: '',
         expires_at: expiresAt,
       },
     });
 
     return session;
+  }
+
+  private async updateSessionRefreshToken(sessionId: string, refreshToken: string) {
+    const refreshTokenHash = await bcrypt.hash(refreshToken, SALT_ROUNDS);
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    return this.prisma.sessions.update({
+      where: {
+        id: sessionId,
+      },
+      data: {
+        refresh_token_hash: refreshTokenHash,
+        expires_at: expiresAt,
+        revoked_at: null,
+        updated_at: new Date(),
+      },
+    });
+  }
+
+  private async issueTokensForUser(user: { id: string; email: string }) {
+    const session = await this.createSession(user.id);
+
+    const accessToken = await this.tokenService.generateAccessToken({
+      sub: user.id,
+      sid: session.id,
+      email: user.email,
+    });
+
+    const refreshToken = await this.tokenService.generateRefreshToken({
+      sub: user.id,
+      sid: session.id,
+    });
+
+    await this.updateSessionRefreshToken(session.id, refreshToken);
+
+    return {
+      accessToken,
+      refreshToken,
+      sessionId: session.id,
+    };
   }
 
   // HELPFUL
@@ -81,16 +127,6 @@ export class AuthService {
     return createdUser;
   }
 
-  // HELPFUL
-  // generateMockTokens
-  // for tokens generator
-  private generateMockTokens(): { accessToken: string; refreshToken: string } {
-    return {
-      accessToken: 'access_' + Date.now(),
-      refreshToken: 'refresh_' + Date.now(),
-    };
-  }
-
   // BL
   // REGISTER
   async register(dto: RegisterDto) {
@@ -106,13 +142,14 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const createdUser = await this.createUser(dto.email, dto.password, dto.name);
+    const createdUser = await this.createUser(emailNormalized, dto.password, dto.name);
+
+    const { accessToken, refreshToken } = await this.issueTokensForUser({
+      id: createdUser.id,
+      email: createdUser.email,
+    });
 
     const userResponse = this.toUserResponse(createdUser.id, createdUser.email, createdUser.name);
-
-    const { accessToken, refreshToken } = this.generateMockTokens();
-
-    const session = await this.createSession(refreshToken, userResponse.id);
 
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
@@ -146,9 +183,9 @@ export class AuthService {
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
 
-  // BL
-  // REFRESH
-  async refresh(dto: RefreshDto): Promise<TokensResponse> {
-    const incomingRefreshToken = dto.refreshToken;
-  }
+  // // BL
+  // // REFRESH
+  // async refresh(dto: RefreshDto): Promise<TokensResponse> {
+  //   const incomingRefreshToken = dto.refreshToken;
+  // }
 }
