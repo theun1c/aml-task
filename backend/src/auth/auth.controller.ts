@@ -4,6 +4,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { CurrentUser } from './current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -32,21 +33,21 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('/logout')
-  async logout(@Req() req: any) {
-    await this.authService.logoutCurrentSession(req.user.sessionId);
+  async logout(@CurrentUser() user: any) {
+    await this.authService.logoutCurrentSession(user.sessionId);
     return { success: true };
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('/logout-all')
-  async logoutAll(@Req() req: any) {
-    await this.authService.logoutAllSessions(req.user.id);
+  async logoutAll(@CurrentUser() user: any) {
+    await this.authService.logoutAllSessions(user.id);
     return { success: true };
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('/sessions')
-  getSessions(@Req() req: any) {
-    return this.authService.getSessions(req.user.id);
+  getSessions(@CurrentUser() user: any) {
+    return this.authService.getSessions(user.id);
   }
 }
