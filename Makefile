@@ -1,7 +1,7 @@
 .PHONY: up down ps pull generate
 
 up: 
-	docker compose up -d 
+	docker compose --env-file .env.prod up -d --build
 
 down: 
 	docker compose down 
@@ -9,6 +9,9 @@ down:
 ps: 
 	docker compose ps 
 
+logs:
+	docker compose logs -f
+	
 pull:
 	npx prisma db pull 
 
