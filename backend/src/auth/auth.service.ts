@@ -263,4 +263,17 @@ export class AuthService {
       },
     });
   }
+
+  async logoutAllSessions(userId: string): Promise<void> {
+    await this.prisma.sessions.updateMany({
+      where: {
+        user_id: userId,
+        revoked_at: null,
+      },
+      data: {
+        revoked_at: new Date(),
+        updated_at: new Date(),
+      },
+    });
+  }
 }

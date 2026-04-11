@@ -36,4 +36,12 @@ export class AuthController {
     await this.authService.logoutCurrentSession(req.user.sessionId);
     return { success: true };
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('/logout-all')
+  async logoutAll(@Req() req: any) {
+    await this.authService.logoutAllSessions(req.user.id);
+    return { success: true };
+  }
+  
 }
