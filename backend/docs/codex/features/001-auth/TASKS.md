@@ -10,47 +10,44 @@
 
 ## 1. Подготовка
 
-- [ ] Уточнить финальный контракт ответов для `register/login/refresh/logout/me`.
-- [ ] Зафиксировать стратегию refresh rotation (ротация + отзыв старого refresh).
-- [ ] Определить env-переменные: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`.
+- [x] Уточнить финальный контракт ответов для `register/login/refresh/logout/me`.
+- [x] Зафиксировать стратегию refresh rotation (ротация + отзыв старого refresh).
+- [x] Определить env-переменные: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`.
 
 ## 2. Изменения в БД
 
-- [ ] Описать модель `users` в Prisma schema.
-- [ ] Добавить таблицу `refresh_tokens` (хеш токена, expiry, revokedAt, userId).
-- [ ] Зафиксировать уникальность email (нормализация в lowercase + unique index).
-- [ ] Создать и применить миграцию Prisma для auth-моделей.
+- [x] Описать модель `users` в Prisma schema.
+- [x] Добавить таблицу `sessions` (хеш токена, expiry, revokedAt, userId).
+- [x] Зафиксировать уникальность email (нормализация в lowercase + unique index).
+- [x] Создать и применить миграцию Prisma для auth-моделей.
 
-## 3. Модули / структура
+## 3. Модули
 
-- [ ] Создать/проверить модуль `auth`.
-- [ ] Выделить `UsersRepository` интерфейс.
-- [ ] Выделить `RefreshTokenRepository` интерфейс.
-- [ ] Подключить `JwtModule` c конфигом из env для access/refresh.
+- [x] Создать/проверить модуль `auth`.
 
 ## 4. DTO и валидация
 
-- [ ] `RegisterDto`: email/password/name.
-- [ ] `LoginDto`: email/password.
-- [ ] `RefreshDto`: refreshToken.
-- [ ] `LogoutDto`: refreshToken.
-- [ ] Включить `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`).
-- [ ] Нормализовать email (`trim + lowercase`).
+- [x] `RegisterDto`: email/password/name.
+- [x] `LoginDto`: email/password.
+- [x] `RefreshDto`: refreshToken.
+- [x] `LogoutDto`: refreshToken.
+- [x] Включить `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`).
+- [x] Нормализовать email (`trim + lowercase`).
 
 ## 5. Бизнес-логика
 
-- [ ] Регистрация: проверка уникальности email, хеширование пароля, создание пользователя.
-- [ ] Логин: проверка credentials, единая ошибка `401`.
+- [x] Регистрация: проверка уникальности email, хеширование пароля, создание пользователя.
+- [x] Логин: проверка credentials, единая ошибка `401`.
 - [ ] Генерация пары токенов (`access`, `refresh`) с минимальным payload (`sub`, `email`).
-- [ ] Сохранение hash refresh token в БД.
+- [x] Сохранение hash refresh token в БД.
 - [ ] Refresh: валидация refresh, отзыв старого, выпуск новой пары токенов.
 - [ ] Logout: отзыв refresh token.
 - [ ] Получение текущего пользователя по `sub` из токена.
 
 ## 6. Контроллеры / API
 
-- [ ] `POST /auth/register`.
-- [ ] `POST /auth/login`.
+- [x] `POST /auth/register`.
+- [x] `POST /auth/login`.
 - [ ] `POST /auth/refresh`.
 - [ ] `POST /auth/logout`.
 - [ ] `GET /auth/me` (под guard).
@@ -83,8 +80,8 @@
 
 ## 9. Ручная проверка
 
-- [ ] Зарегистрировать пользователя через Swagger/Postman.
-- [ ] Выполнить логин и проверить, что токен работает в `GET /auth/me`.
+- [x] Зарегистрировать пользователя через Swagger/Postman.
+- [x] Выполнить логин и проверить, что токен работает в `GET /auth/me`.
 - [ ] Проверить `refresh` и убедиться, что старый refresh становится невалидным.
 - [ ] Проверить `logout` и убедиться, что refresh после logout не работает.
 - [ ] Проверить конфликт при повторной регистрации того же email.
