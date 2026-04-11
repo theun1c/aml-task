@@ -1,17 +1,22 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
-export type AccessTokenPayload = {
+export type AccessTokenInput = {
   sub: string;
   email: string;
-  // role: string;
   sid: string;
+};
+
+export type AccessTokenPayload = AccessTokenInput & {
   type: 'access';
 };
 
-export type RefreshTokenPayload = {
+export type RefreshTokenInput = {
   sub: string;
   sid: string;
+};
+
+export type RefreshTokenPayload = RefreshTokenInput & {
   type: 'refresh';
 };
 
