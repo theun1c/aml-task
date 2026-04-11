@@ -1,12 +1,13 @@
-import { IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserResponse } from './user.response';
 
-export class TokensResponse {
+export class AuthResponse {
   @ApiProperty({ example: '<jwt-access-token>' })
-  @IsString()
   accessToken: string;
 
   @ApiProperty({ example: '<jwt-refresh-token>' })
-  @IsString()
   refreshToken: string;
+
+  @ApiProperty({ type: UserResponse })
+  user: UserResponse;
 }
