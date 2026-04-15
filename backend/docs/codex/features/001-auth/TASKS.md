@@ -6,7 +6,7 @@
 
 - [x] planned
 - [x] in progress
-- [ ] done
+- [x] done
 
 ## 1. Подготовка
 
@@ -55,11 +55,11 @@
 
 ## 6.1 Swagger / OpenAPI
 
-- [ ] Добавить теги и краткие описания операций для всех `auth` endpoint.
-- [ ] Описать request/response DTO для `register/login/refresh/logout/me`.
-- [ ] Описать основные коды ответов (`200/201/400/401/409` где применимо).
-- [ ] Настроить bearer auth схему и пометить `GET /auth/me` как защищенный endpoint.
-- [ ] Проверить, что в Swagger не светится `passwordHash`.
+- [x] Добавить теги и краткие описания операций для всех `auth` endpoint.
+- [x] Описать request/response DTO для `register/login/refresh/logout/me`.
+- [x] Описать основные коды ответов (`200/201/400/401/409` где применимо).
+- [x] Настроить bearer auth схему и пометить `GET /auth/me` как защищенный endpoint.
+- [x] Проверить, что в Swagger не светится `passwordHash`.
 
 ## 7. Права доступа / security
 
@@ -93,5 +93,5 @@
 - [x] Бизнес-правила и ошибки покрыты тестами.
 - [x] Нет утечек `passwordHash`.
 - [x] Нет хранения refresh token в открытом виде.
-- [ ] Swagger-документация auth полная и соответствует фактическому API.
-- [ ] Документация фичи актуальна и согласована с `CONTEXT.md` и `TECH_SPEC.md`.
+- [x] Swagger-документация auth полная и соответствует фактическому API.
+- [x] Документация фичи актуальна и согласована с `CONTEXT.md` и `TECH_SPEC.md`.
