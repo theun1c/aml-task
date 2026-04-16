@@ -43,7 +43,7 @@ jobs:
             docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d --no-deps backend
 
             for i in {1..30}; do
-              if curl -fsS --max-time 3 http://127.0.0.1:3000/api/docs >/dev/null; then
+              if curl -fsS --max-time 3 http://127.0.0.1:3000/api/health >/dev/null; then
                 echo "Healthcheck OK"
                 break
               fi
@@ -51,5 +51,5 @@ jobs:
               sleep 2
             done
 
-            curl -fsS --max-time 3 http://127.0.0.1:3000/api/docs >/dev/null
+            curl -fsS --max-time 3 http://127.0.0.1:3000/api/health >/dev/null
             echo "Deploy OK: ${TAG}"
