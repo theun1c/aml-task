@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -40,6 +40,7 @@ export class AuthController {
   @ApiOkResponse({ type: AuthResponse })
   @ApiBadRequestResponse({ description: 'Validation error' })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
+  @HttpCode(200)
   @Post('/login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
@@ -49,6 +50,7 @@ export class AuthController {
   @ApiOkResponse({ type: TokensResponse })
   @ApiBadRequestResponse({ description: 'Validation error' })
   @ApiUnauthorizedResponse({ description: 'Invalid refresh token' })
+  @HttpCode(200)
   @Post('/refresh')
   async refresh(@Body() dto: RefreshDto) {
     return this.authService.refresh(dto);
@@ -73,6 +75,7 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
   @Post('/logout')
   async logout(@CurrentUser() user: AuthenticatedUser) {
     await this.authService.logoutCurrentSession(user.sessionId);
@@ -84,6 +87,7 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
   @Post('/logout-all')
   async logoutAll(@CurrentUser() user: AuthenticatedUser) {
     await this.authService.logoutAllSessions(user.id);
