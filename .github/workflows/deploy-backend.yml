@@ -1,0 +1,42 @@
+name: Deploy Backend
+
+on:
+  workflow_run:
+    workflows: ["CI Backend"]
+    types: [completed]
+
+jobs:
+  deploy:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            cd /opt/aml-task
+
+            TAG="sha-${{ github.event.workflow_run.head_sha }}"
+
+            if grep -q '^BACKEND_IMAGE_TAG=' .env.prod; then
+              sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=${TAG}/" .env.prod
+            else
+              echo "BACKEND_IMAGE_TAG=${TAG}" >> .env.prod
+            fi
+
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            docker compose --env-file .env.prod -f docker-compose.prod.yaml pull backend
+            docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d backend
+
+            curl -fsS http://127.0.0.1:3000/api/docs >/dev/null
+            echo "Deploy OK: ${TAG}"
