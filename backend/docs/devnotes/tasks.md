@@ -4,7 +4,7 @@
 
 - [x] Инициализация backend-проекта
 - [x] Mock сущности базы данных и Prisma
-- [ ] Auth
+- [x] Auth
 - [ ] Users
 - [ ] Projects
 - [ ] Issues
@@ -13,8 +13,8 @@
 - [ ] Board / Statuses
 - [ ] Access control
 - [ ] Tests
-- [ ] Swagger
-- [ ] Deployment prep
+- [x] Swagger
+- [x] Deployment prep
 
 ---
 
@@ -47,9 +47,9 @@
 - [x] Спроектировать модель User
 - [x] Реализовать регистрацию
 - [x] Реализовать логин
-- [ ] Настроить JWT
-- [ ] Реализовать endpoint /auth/me
-- [ ] Добавить хеширование пароля
+- [x] Настроить JWT
+- [x] Реализовать endpoint /auth/me
+- [x] Добавить хеширование пароля
 - [x] Добавить базовую валидацию DTO
 
 ---
@@ -159,8 +159,8 @@
 
 ## 13. Документация API
 
-- [ ] Подключить Swagger
-- [ ] Описать auth endpoints
+- [x] Подключить Swagger
+- [x] Описать auth endpoints
 - [ ] Описать project endpoints
 - [ ] Описать issue endpoints
 - [ ] Описать sprint endpoints
@@ -169,7 +169,7 @@
 
 ## 14. Подготовка к деплою
 
-- [ ] Dockerfile
-- [ ] docker-compose для backend + db
-- [ ] production env variables
+- [x] Dockerfile
+- [x] docker-compose для backend + db
+- [x] production env variables
 - [ ] migration flow для production
