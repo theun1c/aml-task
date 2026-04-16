@@ -11,7 +11,6 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
-
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -36,7 +35,16 @@ jobs:
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
             docker compose --env-file .env.prod -f docker-compose.prod.yaml pull backend
-            docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d backend
+            docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d --no-deps backend
 
-            curl -fsS http://127.0.0.1:3000/api/docs >/dev/null
+            for i in {1..30}; do
+              if curl -fsS --max-time 3 http://127.0.0.1:3000/api/docs >/dev/null; then
+                echo "Healthcheck OK"
+                break
+              fi
+              echo "Waiting backend... attempt $i/30"
+              sleep 2
+            done
+
+            curl -fsS --max-time 3 http://127.0.0.1:3000/api/docs >/dev/null
             echo "Deploy OK: ${TAG}"
