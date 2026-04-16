@@ -34,6 +34,11 @@ jobs:
 
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
+            # cleanup old docker artifacts to avoid disk-full on small VPS
+            docker image prune -af || true
+            docker builder prune -af || true
+            docker container prune -f || true
+
             docker compose --env-file .env.prod -f docker-compose.prod.yaml pull backend
             docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d --no-deps backend
 
