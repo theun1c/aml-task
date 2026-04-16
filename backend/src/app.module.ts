@@ -11,8 +11,8 @@ import { HealthController } from './health.controller';
       envFilePath: '.env',
     }),
     AuthModule,
-    HealthController,
   ],
+  controllers: [HealthController],
   providers: [PrismaService],
 })
 export class AppModule {}
