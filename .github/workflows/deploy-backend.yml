@@ -24,17 +24,24 @@ jobs:
             set -e
             cd /opt/aml-task
 
-            TAG="sha-${{ github.event.workflow_run.head_sha }}"
+            NEW_TAG="sha-${{ github.event.workflow_run.head_sha }}"
+            PREV_TAG="$(grep '^BACKEND_IMAGE_TAG=' .env.prod | cut -d'=' -f2 || true)"
+
+            if [ -z "$PREV_TAG" ]; then
+              PREV_TAG="latest"
+            fi
+
+            echo "Current tag: $PREV_TAG"
+            echo "Deploying new tag: $NEW_TAG"
 
             if grep -q '^BACKEND_IMAGE_TAG=' .env.prod; then
-              sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=${TAG}/" .env.prod
+              sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=${NEW_TAG}/" .env.prod
             else
-              echo "BACKEND_IMAGE_TAG=${TAG}" >> .env.prod
+              echo "BACKEND_IMAGE_TAG=${NEW_TAG}" >> .env.prod
             fi
 
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-            # cleanup old docker artifacts to avoid disk-full on small VPS
             docker image prune -af || true
             docker builder prune -af || true
             docker container prune -f || true
@@ -42,8 +49,10 @@ jobs:
             docker compose --env-file .env.prod -f docker-compose.prod.yaml pull backend
             docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d --no-deps backend
 
+            HEALTH_OK=0
             for i in {1..30}; do
               if curl -fsS --max-time 3 http://127.0.0.1:3000/api/health >/dev/null; then
+                HEALTH_OK=1
                 echo "Healthcheck OK"
                 break
               fi
@@ -51,5 +60,21 @@ jobs:
               sleep 2
             done
 
-            curl -fsS --max-time 3 http://127.0.0.1:3000/api/health >/dev/null
-            echo "Deploy OK: ${TAG}"
+            if [ "$HEALTH_OK" -ne 1 ]; then
+              echo "Healthcheck failed. Rolling back to: $PREV_TAG"
+
+              if grep -q '^BACKEND_IMAGE_TAG=' .env.prod; then
+                sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=${PREV_TAG}/" .env.prod
+              else
+                echo "BACKEND_IMAGE_TAG=${PREV_TAG}" >> .env.prod
+              fi
+
+              docker compose --env-file .env.prod -f docker-compose.prod.yaml pull backend
+              docker compose --env-file .env.prod -f docker-compose.prod.yaml up -d --no-deps backend
+
+              curl -fsS --max-time 5 http://127.0.0.1:3000/api/health >/dev/null
+              echo "Rollback successful: $PREV_TAG"
+              exit 1
+            fi
+
+            echo "Deploy OK: $NEW_TAG"
