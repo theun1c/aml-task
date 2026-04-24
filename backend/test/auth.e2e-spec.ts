@@ -1,15 +1,20 @@
 /// <reference types="jest" />
-import { ExecutionContext, INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import {
+  ExecutionContext,
+  INestApplication,
+  UnauthorizedException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 
-jest.mock('../src/auth/auth.service', () => ({
+jest.mock('../src/auth/services/auth.service', () => ({
   AuthService: class AuthService {},
 }));
 
-import { AuthController } from '../src/auth/auth.controller';
-import { AuthService } from '../src/auth/auth.service';
-import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
+import { AuthController } from '../src/auth/controllers/auth.controller';
+import { AuthService } from '../src/auth/services/auth.service';
+import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 
 describe('AuthController (e2e)', () => {
   let app: INestApplication;
