@@ -6,7 +6,7 @@
 - регистрация по `email + password`;
 - вход по `email + password`;
 - обновление access token через refresh token;
-- logout с отзывом refresh token.
+- logout текущей авторизованной сессии.
 
 Фича реализуется через Prisma + PostgreSQL уже на старте (допускается временная локальная/тестовая БД).
 
@@ -33,7 +33,7 @@
 2. Существующий пользователь логинится с правильными данными -> получает `accessToken`, `refreshToken` и профиль.
 3. Пользователь логинится с телефона и с браузера -> обе сессии остаются валидными независимо друг от друга.
 4. Access token истек -> пользователь отправляет `refreshToken` в `POST /auth/refresh` и получает новую пару токенов.
-5. Пользователь делает `POST /auth/logout` -> текущий refresh token становится невалидным, остальные сессии продолжают работать.
+5. Пользователь делает `POST /auth/logout` с валидным access token -> текущая сессия отзывается, остальные сессии продолжают работать.
 6. Пользователь передает неверные credentials -> получает 401.
 7. Пользователь передает некорректный email/слишком короткий пароль -> получает 400 с деталями валидации.
 
@@ -48,7 +48,8 @@
 - Refresh token не хранится в открытом виде (только hash).
 - После refresh выдается новая пара токенов, старый refresh становится невалидным (rotation).
 - У пользователя может быть несколько активных refresh-сессий одновременно (например, телефон + браузер).
-- `POST /auth/logout` отзывает только переданный refresh token (текущую сессию).
+- `POST /auth/logout` доступен только с валидным access token.
+- `POST /auth/logout` отзывает только текущую сессию пользователя по `sessionId` из access token.
 
 ## 5. API-контракт
 ### `POST /auth/register`
@@ -100,11 +101,8 @@ Response `200`:
 
 ### `POST /auth/logout`
 Request:
-```json
-{
-  "refreshToken": "<jwt>"
-}
-```
+- Bearer access token в заголовке `Authorization`.
+
 Response `200`:
 ```json
 {
@@ -141,7 +139,7 @@ Response `200`:
 - `email`: обязателен, валидный email.
 - `password`: обязателен, min length = 8.
 - `name`: обязателен, длина 2..50.
-- `refreshToken`: обязателен в `refresh/logout`.
+- `refreshToken`: обязателен в `refresh`.
 - Trim для `email` и `name`.
 - Email нормализуется в lowercase перед проверкой уникальности.
 
@@ -152,7 +150,7 @@ Response `200`:
 - Невалидный/просроченный JWT -> `401 Unauthorized`.
 - Невалидный/просроченный refresh token -> `401 Unauthorized`.
 - Повторное использование уже отозванного refresh token -> `401 Unauthorized`.
-- Logout с уже отозванным/невалидным refresh token -> `401 Unauthorized`.
+- `POST /auth/logout` без access token -> `401 Unauthorized`.
 - Logout в одной сессии не должен инвалидировать refresh token других сессий пользователя.
 - Пустые/неполные поля -> `400 Bad Request`.
 - Попытка передать лишние поля в DTO -> отклонять (whitelist).

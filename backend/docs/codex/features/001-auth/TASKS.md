@@ -30,7 +30,7 @@
 - [x] `RegisterDto`: email/password/name.
 - [x] `LoginDto`: email/password.
 - [x] `RefreshDto`: refreshToken.
-- [x] `LogoutDto`: refreshToken.
+- [x] Для `logout` использовать access token из guard, без request DTO.
 - [x] Включить `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`).
 - [x] Нормализовать email (`trim + lowercase`).
 
@@ -41,7 +41,7 @@
 - [x] Генерация пары токенов (`access`, `refresh`) с минимальным payload (`sub`, `email`).
 - [x] Сохранение hash refresh token в БД.
 - [x] Refresh: валидация refresh, отзыв старого, выпуск новой пары токенов.
-- [x] Logout: отзыв refresh token.
+- [x] Logout: отзыв текущей сессии по `sessionId` из access token.
 - [x] Получение текущего пользователя по `sub` из токена.
 
 ## 6. Контроллеры / API
@@ -83,7 +83,7 @@
 - [x] Зарегистрировать пользователя через Swagger/Postman.
 - [x] Выполнить логин и проверить, что токен работает в `GET /auth/me`.
 - [x] Проверить `refresh` и убедиться, что старый refresh становится невалидным.
-- [x] Проверить `logout` и убедиться, что refresh после logout не работает.
+- [x] Проверить `logout` и убедиться, что текущая сессия после logout больше не проходит guard.
 - [x] Проверить конфликт при повторной регистрации того же email.
 - [x] Проверить валидацию email/password/name.
 
