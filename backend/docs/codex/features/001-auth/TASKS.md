@@ -69,16 +69,7 @@
 - [x] Добавить безопасные сообщения об ошибках логина (без утечки деталей).
 - [x] Проверить срок жизни токена и обработку expired token.
 
-<!-- ## 8. Тестирование
-
-- [ ] Unit: `AuthService` (register/login/refresh/logout/validate).
-- [ ] Unit: edge cases (duplicate email, wrong password, unknown email).
-- [ ] Unit: edge cases refresh (expired/revoked/invalid token).
-- [ ] E2E: `register -> login -> me` happy path.
-- [ ] E2E: `login -> refresh -> me` с новым access token.
-- [ ] E2E: 401 без токена и с невалидным токеном. -->
-
-## 9. Ручная проверка
+## 8. Ручная проверка
 
 - [x] Зарегистрировать пользователя через Swagger/Postman.
 - [x] Выполнить логин и проверить, что токен работает в `GET /auth/me`.
@@ -87,7 +78,7 @@
 - [x] Проверить конфликт при повторной регистрации того же email.
 - [x] Проверить валидацию email/password/name.
 
-## 10. Definition of Done
+## 9. Definition of Done
 
 - [x] Все endpoint auth (`register/login/refresh/logout/me`) соответствуют `SPEC.md`.
 - [x] Бизнес-правила и ошибки покрыты тестами.
