@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PrismaService } from '../prisma.service';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 
 type AccessJwtPayload = {
   sub: string;

@@ -1,12 +1,12 @@
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 
-jest.mock('../prisma.service', () => ({
+jest.mock('../infrastructure/prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
 }));
 
-import { AuthService } from './auth.service';
-import { PrismaService } from '../prisma.service';
-import { TokenService } from './token.service';
+import { AuthService } from './services/auth.service';
+import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { TokenService } from './services/token.service';
 
 type PrismaMock = {
   users: {

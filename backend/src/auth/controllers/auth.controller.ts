@@ -1,11 +1,11 @@
 import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
-import { RefreshDto } from './dto/refresh.dto';
-import { JwtAuthGuard } from './jwt-auth.guard';
-import { CurrentUser } from './current-user.decorator';
-import type { AuthenticatedUser } from './current-user.decorator';
+import { AuthService } from '../services/auth.service';
+import { RegisterDto } from '../dto/register.dto';
+import { LoginDto } from '../dto/login.dto';
+import { RefreshDto } from '../dto/refresh.dto';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { CurrentUser } from '../decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../decorators/current-user.decorator';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -16,11 +16,11 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { AuthResponse } from './types/auth-response';
-import { TokensResponse } from './types/tokens.response';
-import { UserResponse } from './types/user.response';
-import { SuccessResponse } from './types/success.response';
-import { SessionResponse } from './types/session.response';
+import { AuthResponse } from '../responses/auth-response';
+import { TokensResponse } from '../responses/tokens.response';
+import { UserResponse } from '../responses/user.response';
+import { SuccessResponse } from '../responses/success.response';
+import { SessionResponse } from '../responses/session.response';
 
 @ApiTags('auth')
 @Controller('auth')

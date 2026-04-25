@@ -1,11 +1,11 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { RegisterDto } from './dto/register.dto';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { RegisterDto } from '../dto/register.dto';
 import * as bcrypt from 'bcrypt';
-import { UserResponse } from './types/user.response';
-import { LoginDto } from './dto/login.dto';
-import { RefreshDto } from './dto/refresh.dto';
-import { TokensResponse } from './types/tokens.response';
+import { UserResponse } from '../responses/user.response';
+import { LoginDto } from '../dto/login.dto';
+import { RefreshDto } from '../dto/refresh.dto';
+import { TokensResponse } from '../responses/tokens.response';
 import { RefreshTokenPayload, TokenService } from './token.service';
 import { createHash } from 'crypto';
 
