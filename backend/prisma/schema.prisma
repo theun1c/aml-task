@@ -41,7 +41,7 @@ model issues {
   project_members_issues_project_id_assignee_idToproject_members project_members? @relation("issues_project_id_assignee_idToproject_members", fields: [project_id, assignee_id], references: [project_id, user_id], onUpdate: Restrict, map: "fk_issues_assignee_member")
   project_members_issues_project_id_creator_idToproject_members  project_members  @relation("issues_project_id_creator_idToproject_members", fields: [project_id, creator_id], references: [project_id, user_id], onUpdate: Restrict, map: "fk_issues_creator_member")
   projects                                                       projects         @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_issues_project")
-  sprints                                                        sprints?         @relation(fields: [project_id, sprint_id], references: [project_id, id], onDelete: SetNull, onUpdate: Restrict, map: "fk_issues_sprint_same_project")
+  sprints                                                        sprints?         @relation(fields: [project_id, sprint_id], references: [project_id, id], onUpdate: Restrict, map: "fk_issues_sprint_same_project")
   statuses                                                       statuses         @relation(fields: [project_id, status_id], references: [project_id, id], onUpdate: Restrict, map: "fk_issues_status_same_project")
 
   @@index([assignee_id], map: "ix_issues_assignee_id")
