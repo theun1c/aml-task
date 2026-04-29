@@ -2,7 +2,10 @@ ENV_FILE ?= .env.dev
 COMPOSE_FILE ?= docker-compose.dev.yml
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 
-.PHONY: develop-database-up develop-database-down develop-database-logs develop-backend-up develop-prisma-generate develop-prisma-pull
+.PHONY: develop develop-database-up develop-database-down develop-database-logs develop-backend-up develop-prisma-generate develop-prisma-pull
+
+develop: develop-database-up develop-prisma-pull develop-prisma-generate
+	ENV_FILE=$(ENV_FILE) npm run start:dev
 
 develop-database-up:
 	$(COMPOSE) up -d postgres
