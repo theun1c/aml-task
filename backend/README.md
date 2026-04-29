@@ -4,6 +4,38 @@ Backend для AML Task Manager.
 
 Сейчас это NestJS API с Prisma/PostgreSQL, Swagger-документацией и базовым модулем авторизации.
 
+## Локальная dev-разработка
+
+Для локального dev-запуска сейчас используются такие файлы:
+
+- `.env.dev` — основной env-файл для локальной разработки. И приложение, и Prisma берут путь к env через переменную `ENV_FILE`.
+- `docker-compose.dev.yml` — docker-compose конфиг для локального PostgreSQL.
+- `Makefile` — основной entrypoint для dev-команд.
+- `package.json` — содержит `npm run start:dev` для запуска NestJS в watch-режиме.
+- `.env.example` — шаблон переменных, если нужно заново собрать локальный env-файл.
+
+Текущий основной сценарий запуска:
+
+```bash
+make develop
+```
+
+Что делает `make develop`:
+
+- поднимает PostgreSQL из `docker-compose.dev.yml`;
+- выполняет `prisma db pull`;
+- выполняет `prisma generate`;
+- запускает backend через `npm run start:dev`.
+
+Полезные dev-команды:
+
+- `make develop-database-up` — поднять только dev-базу.
+- `make develop-backend-up` — поднять dev-базу и запустить backend.
+- `make develop-database-logs` — смотреть логи PostgreSQL.
+- `make develop-database-down` — остановить dev-compose.
+
+Если `ENV_FILE` не передан явно, в `Makefile` по умолчанию используется `.env.dev`.
+
 ## Где доступен backend
 
 - Swagger / API docs: [http://194.156.118.99/api/docs](http://194.156.118.99/api/docs)
@@ -107,5 +139,5 @@ src/
 
 - Архитектура: [docs/product/ARCHITECTURE.md](docs/product/ARCHITECTURE.md)
 - Техническое задание: [docs/product/TECH_SPEC.md](docs/product/TECH_SPEC.md)
-- Спецификация auth: [docs/codex/features/001-auth/SPEC.md](docs/codex/features/001-auth/SPEC.md)
-- Задачи по auth: [docs/codex/features/001-auth/TASKS.md](docs/codex/features/001-auth/TASKS.md)
+- Спецификация auth: [docs/ai/features/001-auth/SPEC.md](docs/ai/features/001-auth/SPEC.md)
+- Задачи по auth: [docs/ai/features/001-auth/TASKS.md](docs/ai/features/001-auth/TASKS.md)
