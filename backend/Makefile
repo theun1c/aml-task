@@ -2,7 +2,7 @@ ENV_FILE ?= .env.dev
 COMPOSE_FILE ?= docker-compose.dev.yml
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 
-.PHONY: dev-up dev-down dev-logs dev prisma-generate prisma-migrate-dev prisma-studio
+.PHONY: develop-database-up develop-database-down develop-database-logs develop-backend-up develop-prisma-generate develop-prisma-pull
 
 develop-database-up:
 	$(COMPOSE) up -d postgres
