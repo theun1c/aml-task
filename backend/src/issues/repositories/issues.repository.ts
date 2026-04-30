@@ -16,7 +16,10 @@ export class IssuesRepository {
     return tx.issues.create({ data });
   }
 
-  async update(issueId: string, data: Prisma.issuesUpdateInput | Prisma.issuesUncheckedUpdateInput) {
+  async update(
+    issueId: string,
+    data: Prisma.issuesUpdateInput | Prisma.issuesUncheckedUpdateInput,
+  ) {
     return this.prisma.issues.update({
       where: { id: issueId },
       data,
