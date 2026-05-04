@@ -6,35 +6,64 @@ Backend для AML Task Manager.
 
 ## Локальная dev-разработка
 
-Для локального dev-запуска сейчас используются такие файлы:
+Проект работает в режиме `remote-db only`: backend запускается локально, а Prisma и приложение подключаются к удаленной PostgreSQL через SSH-туннель.
 
-- `.env.dev` — основной env-файл для локальной разработки. И приложение, и Prisma берут путь к env через переменную `ENV_FILE`.
-- `docker-compose.dev.yml` — docker-compose конфиг для локального PostgreSQL.
+Основные файлы:
+
+- `.env.prod` — основной env-файл для подключения к удаленной БД через локальный SSH-туннель.
 - `Makefile` — основной entrypoint для dev-команд.
-- `package.json` — содержит `npm run start:dev` для запуска NestJS в watch-режиме.
-- `.env.example` — шаблон переменных, если нужно заново собрать локальный env-файл.
+- `.env.example` — шаблон переменных для remote DB режима.
 
-Текущий основной сценарий запуска:
+Рекомендуемый сценарий запуска:
 
 ```bash
-make develop
+make ssh-tunnel
 ```
 
-Что делает `make develop`:
+В отдельном терминале:
 
-- поднимает PostgreSQL из `docker-compose.dev.yml`;
+```bash
+make sync-db-schema
+make start-dev
+```
+
+Что делает этот flow:
+
 - выполняет `prisma db pull`;
 - выполняет `prisma generate`;
-- запускает backend через `npm run start:dev`.
+- запускает backend через `npm run start:dev` против удаленной БД.
 
 Полезные dev-команды:
 
-- `make develop-database-up` — поднять только dev-базу.
-- `make develop-backend-up` — поднять dev-базу и запустить backend.
-- `make develop-database-logs` — смотреть логи PostgreSQL.
-- `make develop-database-down` — остановить dev-compose.
+- `make ssh-tunnel` — открыть SSH-туннель к удаленной PostgreSQL.
+- `make sync-db-schema` — подтянуть актуальную схему из БД и пересобрать Prisma Client.
+- `make start-dev` — запустить backend локально.
+- `make develop` — выполнить `sync-db-schema`, затем запустить backend.
 
-Если `ENV_FILE` не передан явно, в `Makefile` по умолчанию используется `.env.dev`.
+Если `ENV_FILE` не передан явно, в `Makefile` по умолчанию используется `.env.prod`.
+
+## Подключение к удаленной БД
+
+База данных на сервере недоступна напрямую извне, поэтому подключение идет через SSH-туннель:
+
+```text
+localhost:5433 on your machine
+-> SSH tunnel
+-> 127.0.0.1:5432 on the server
+-> PostgreSQL
+```
+
+Пример:
+
+```bash
+ssh -L 5433:127.0.0.1:5432 theun1c@194.156.118.99
+```
+
+После этого `DATABASE_URL` в `.env.prod` может оставаться в формате:
+
+```env
+DATABASE_URL=postgresql://aml_user:root123@localhost:5433/aml_db?schema=aml_task
+```
 
 ## Где доступен backend
 
@@ -106,38 +135,26 @@ src/
 
 ## Какие модули уже есть в проекте
 
-### Реально используются сейчас
-
 - `auth`
 - `infrastructure/prisma`
 - `health`
-
-### Подготовлены как каркас для следующей разработки
-
 - `users`
-- `projects`
 - `issues`
-- `comments`
-- `common`
-- `infrastructure/config`
 
 ## Ближайшие задачи
 
 Важное:
-- настроить сертификаты и HTTPS через nginx;
-- получить домен;
-- продолжить развитие backend-модулей кроме `auth`.
+- продолжить развитие backend-модулей кроме `auth`;
+- стабилизировать flow синхронизации Prisma со схемой удаленной БД;
+- почистить проект от лишних dev-артефактов.
 
 Технический следующий шаг:
 - разгрузить `AuthService`;
 - начать выносить повторяющиеся Prisma-запросы в `repositories`;
 - описать деплой backend;
-- протестировать сервер на нагрузку и отказоустойчивость;
-- почистить проект от лишних файлов и временных артефактов.
+- протестировать сервер на нагрузку и отказоустойчивость.
 
 ## Документация
 
 - Архитектура: [docs/product/ARCHITECTURE.md](docs/product/ARCHITECTURE.md)
 - Техническое задание: [docs/product/TECH_SPEC.md](docs/product/TECH_SPEC.md)
-- Спецификация auth: [docs/ai/features/001-auth/SPEC.md](docs/ai/features/001-auth/SPEC.md)
-- Задачи по auth: [docs/ai/features/001-auth/TASKS.md](docs/ai/features/001-auth/TASKS.md)
