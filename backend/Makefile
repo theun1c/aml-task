@@ -21,5 +21,8 @@ prisma-pull:
 prisma-generate:
 	ENV_FILE=$(ENV_FILE) npx prisma generate
 
-ssh-tunnel:
-	ssh -L $(DB_LOCAL_PORT):$(DB_REMOTE_HOST):$(DB_REMOTE_PORT) -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
+postgres-dev-up: 
+	docker compose --env-file .env.dev -f docker-compose.dev.yaml up -d
+
+postgres-dev-down:
+	docker compose --env-file .env.dev -f docker-compose.dev.yaml down

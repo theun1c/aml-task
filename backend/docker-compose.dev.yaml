@@ -1,0 +1,19 @@
+services:
+  postgres:
+    container_name: postgres_dev_aml_db
+    image: postgres:16-alpine
+    env_file:
+      - .env.dev
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGDATA=/data/postgres
+    volumes:
+      - postgres:/data/postgres
+    ports:
+      - ${POSTGRES_PORT:-5433}:5432
+    restart: unless-stopped
+
+volumes:
+  postgres:
