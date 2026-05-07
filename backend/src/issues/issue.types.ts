@@ -1,4 +1,4 @@
-import type { issues, project_members, projects } from '../../generated/prisma/client';
+import type { Prisma, project_members, projects } from '../../generated/prisma/client';
 
 export type IssueListScope = {
   projectId: string;
@@ -11,4 +11,14 @@ export type ProjectAccess = {
   project: projects;
 };
 
-export type IssueEntity = issues;
+export const issueWithTypeInclude = {
+  issue_types: {
+    select: {
+      code: true,
+    },
+  },
+} satisfies Prisma.issuesInclude;
+
+export type IssueEntity = Prisma.issuesGetPayload<{
+  include: typeof issueWithTypeInclude;
+}>;

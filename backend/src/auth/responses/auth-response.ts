@@ -3,10 +3,10 @@ import { UserResponse } from './user.response';
 
 export class AuthResponse {
   @ApiProperty({ example: '<jwt-access-token>' })
-  accessToken: string;
+  access_token: string;
 
   @ApiProperty({ example: '<jwt-refresh-token>' })
-  refreshToken: string;
+  refresh_token: string;
 
   @ApiProperty({ type: UserResponse })
   user: UserResponse;

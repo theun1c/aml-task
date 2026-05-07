@@ -1,27 +1,22 @@
 ENV_FILE ?= .env.dev
-COMPOSE_FILE ?= docker-compose.dev.yml
-COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 
-.PHONY: develop develop-database-up develop-database-down develop-database-logs develop-backend-up develop-prisma-generate develop-prisma-pull
+.PHONY: develop start-dev sync-db-schema prisma-generate ssh-tunnel
 
-develop: develop-database-up develop-prisma-pull develop-prisma-generate
+develop: sync-db-schema start-dev
+
+start-dev:
 	ENV_FILE=$(ENV_FILE) npm run start:dev
 
-develop-database-up:
-	$(COMPOSE) up -d postgres
+sync-db-schema: prisma-pull prisma-generate
 
-develop-database-down:
-	$(COMPOSE) down
-
-develop-database-logs:
-	$(COMPOSE) logs -f postgres
-
-develop-backend-up: develop-database-up
-	ENV_FILE=$(ENV_FILE) npm run start:dev
-
-develop-prisma-generate:
-	ENV_FILE=$(ENV_FILE) npx prisma generate
-
-develop-prisma-pull:
+prisma-pull:
 	ENV_FILE=$(ENV_FILE) npx prisma db pull
 
+prisma-generate:
+	ENV_FILE=$(ENV_FILE) npx prisma generate
+
+postgres-dev-up: 
+	docker compose --env-file .env.dev -f docker-compose.dev.yaml up -d
+
+postgres-dev-down:
+	docker compose --env-file .env.dev -f docker-compose.dev.yaml down

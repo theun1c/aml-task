@@ -1,4 +1,5 @@
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { createHash } from 'crypto';
 
 jest.mock('../infrastructure/prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
@@ -13,7 +14,7 @@ type PrismaMock = {
     findUnique: jest.Mock;
     create: jest.Mock;
   };
-  sessions: {
+  user_sessions: {
     create: jest.Mock;
     update: jest.Mock;
     findUnique: jest.Mock;
@@ -33,7 +34,7 @@ describe('AuthService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
       },
-      sessions: {
+      user_sessions: {
         create: jest.fn(),
         update: jest.fn(),
         findUnique: jest.fn(),
@@ -52,6 +53,8 @@ describe('AuthService', () => {
     service = new AuthService(prisma as unknown as PrismaService, tokenService);
   });
 
+  const hashRefreshToken = (value: string) => createHash('sha256').update(value).digest('hex');
+
   it('register() should throw ConflictException when user with normalized email already exists', async () => {
     prisma.users.findUnique.mockResolvedValue({
       id: 'u1',
@@ -66,7 +69,7 @@ describe('AuthService', () => {
       service.register({
         email: '  USER@EXAMPLE.COM  ',
         password: 'strongPass123',
-        name: 'User Name',
+        full_name: 'User Name',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
 
@@ -101,9 +104,10 @@ describe('AuthService', () => {
       sid: 's1',
       type: 'refresh',
     });
-    prisma.sessions.findUnique.mockResolvedValue({
+    prisma.user_sessions.findUnique.mockResolvedValue({
       id: 's1',
       user_id: 'u1',
+      is_revoked: false,
       refresh_token_hash: 'another-hash',
       revoked_at: null,
       expires_at: new Date(Date.now() + 60_000),
@@ -112,14 +116,90 @@ describe('AuthService', () => {
       users: {
         id: 'u1',
         email: 'user@example.com',
-        name: 'User',
+        full_name: 'User',
       },
     });
 
     await expect(
       service.refresh({
-        refreshToken: 'refresh-token-value',
+        refresh_token: 'refresh-token-value',
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('refresh() should throw UnauthorizedException when session is revoked via is_revoked flag', async () => {
+    tokenService.verifyRefreshToken.mockResolvedValue({
+      sub: 'u1',
+      sid: 's1',
+      type: 'refresh',
+    });
+    prisma.user_sessions.findUnique.mockResolvedValue({
+      id: 's1',
+      user_id: 'u1',
+      is_revoked: true,
+      refresh_token_hash: hashRefreshToken('refresh-token-value'),
+      revoked_at: null,
+      expires_at: new Date(Date.now() + 60_000),
+      created_at: new Date(),
+      updated_at: new Date(),
+      users: {
+        id: 'u1',
+        email: 'user@example.com',
+        full_name: 'User',
+      },
+    });
+
+    await expect(
+      service.refresh({
+        refresh_token: 'refresh-token-value',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(tokenService.generateAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('logoutCurrentSession() should set both is_revoked and revoked_at', async () => {
+    prisma.user_sessions.update.mockResolvedValue({
+      id: 's1',
+    });
+
+    await service.logoutCurrentSession('s1');
+
+    expect(prisma.user_sessions.update).toHaveBeenCalledWith({
+      where: {
+        id: 's1',
+      },
+      data: expect.objectContaining({
+        is_revoked: true,
+        revoked_at: expect.any(Date),
+        updated_at: expect.any(Date),
+      }),
+    });
+  });
+
+  it('getSessions() should request only non-revoked user_sessions', async () => {
+    prisma.user_sessions.findMany.mockResolvedValue([]);
+
+    await service.getSessions('u1');
+
+    expect(prisma.user_sessions.findMany).toHaveBeenCalledWith({
+      where: {
+        user_id: 'u1',
+        is_revoked: false,
+        revoked_at: null,
+        expires_at: {
+          gt: expect.any(Date),
+        },
+      },
+      select: {
+        id: true,
+        created_at: true,
+        expires_at: true,
+        revoked_at: true,
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
   });
 });

@@ -29,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid token type');
     }
 
-    const session = await this.prisma.sessions.findUnique({
+    const session = await this.prisma.user_sessions.findUnique({
       where: {
         id: payload.sid,
       },
@@ -43,7 +43,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid session');
     }
 
-    if (session.revoked_at) {
+    if (session.is_revoked || session.revoked_at) {
       throw new UnauthorizedException('Session revoked');
     }
 
@@ -58,7 +58,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       select: {
         id: true,
         email: true,
-        name: true,
+        full_name: true,
       },
     });
 
@@ -69,7 +69,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       id: user.id,
       email: user.email,
-      name: user.name,
+      name: user.full_name,
       sessionId: payload.sid,
     };
   }

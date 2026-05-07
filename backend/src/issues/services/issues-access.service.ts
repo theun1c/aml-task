@@ -5,8 +5,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { sprint_status, statuses } from '../../../generated/prisma/client';
+import { statuses } from '../../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import type { IssueTypeValue } from '../issue-type';
 import { ProjectAccess } from '../issue.types';
 import { IssuesRepository } from '../repositories/issues.repository';
 
@@ -24,7 +25,7 @@ export class IssuesAccessService {
       },
     });
 
-    if (!project) {
+    if (!project || project.deleted_at !== null) {
       throw new NotFoundException('Project not found');
     }
 
@@ -32,6 +33,8 @@ export class IssuesAccessService {
       where: {
         project_id: projectId,
         user_id: userId,
+        is_active: true,
+        left_at: null,
       },
     });
 
@@ -81,7 +84,7 @@ export class IssuesAccessService {
       },
     });
 
-    if (!user) {
+    if (!user || user.deleted_at !== null || !user.is_active) {
       throw new NotFoundException('Assignee not found');
     }
 
@@ -89,6 +92,8 @@ export class IssuesAccessService {
       where: {
         project_id: projectId,
         user_id: assigneeId,
+        is_active: true,
+        left_at: null,
       },
     });
 
@@ -130,8 +135,22 @@ export class IssuesAccessService {
       throw new BadRequestException('Sprint must belong to the same project');
     }
 
-    if (sprint.status === sprint_status.completed) {
+    if (sprint.status === 'completed') {
       throw new ConflictException('Completed sprint does not accept new issues');
     }
+  }
+
+  async getIssueTypeOrThrow(typeCode: IssueTypeValue) {
+    const issueType = await this.prisma.issue_types.findUnique({
+      where: {
+        code: typeCode,
+      },
+    });
+
+    if (!issueType) {
+      throw new ConflictException(`Issue type "${typeCode}" is not configured`);
+    }
+
+    return issueType;
   }
 }

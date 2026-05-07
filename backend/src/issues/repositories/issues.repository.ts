@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, PrismaClient, issues } from '../../../generated/prisma/client';
+import { Prisma, PrismaClient } from '../../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
-import { IssueListScope } from '../issue.types';
+import { rankPositionToNumber } from '../issue-db-mappers';
+import { IssueEntity, IssueListScope, issueWithTypeInclude } from '../issue.types';
 
 type PrismaExecutor = PrismaService | Prisma.TransactionClient | PrismaClient;
 
@@ -12,17 +13,21 @@ export class IssuesRepository {
   async createTx(
     tx: Prisma.TransactionClient,
     data: Prisma.issuesCreateInput | Prisma.issuesUncheckedCreateInput,
-  ) {
-    return tx.issues.create({ data });
+  ): Promise<IssueEntity> {
+    return tx.issues.create({
+      data,
+      include: issueWithTypeInclude,
+    });
   }
 
   async update(
     issueId: string,
     data: Prisma.issuesUpdateInput | Prisma.issuesUncheckedUpdateInput,
-  ) {
+  ): Promise<IssueEntity> {
     return this.prisma.issues.update({
       where: { id: issueId },
       data,
+      include: issueWithTypeInclude,
     });
   }
 
@@ -30,10 +35,11 @@ export class IssuesRepository {
     tx: Prisma.TransactionClient,
     issueId: string,
     data: Prisma.issuesUpdateInput | Prisma.issuesUncheckedUpdateInput,
-  ) {
+  ): Promise<IssueEntity> {
     return tx.issues.update({
       where: { id: issueId },
       data,
+      include: issueWithTypeInclude,
     });
   }
 
@@ -43,35 +49,41 @@ export class IssuesRepository {
     });
   }
 
-  async findByProjectAndId(projectId: string, issueId: string): Promise<issues | null> {
+  async findByProjectAndId(projectId: string, issueId: string): Promise<IssueEntity | null> {
     return this.prisma.issues.findFirst({
       where: {
         id: issueId,
         project_id: projectId,
+        deleted_at: null,
       },
+      include: issueWithTypeInclude,
     });
   }
 
-  async findByIdTx(tx: Prisma.TransactionClient, issueId: string) {
+  async findByIdTx(tx: Prisma.TransactionClient, issueId: string): Promise<IssueEntity | null> {
     return tx.issues.findUnique({
       where: { id: issueId },
+      include: issueWithTypeInclude,
     });
   }
 
-  async findBacklog(projectId: string): Promise<issues[]> {
+  async findBacklog(projectId: string): Promise<IssueEntity[]> {
     return this.prisma.issues.findMany({
       where: {
         project_id: projectId,
         sprint_id: null,
+        deleted_at: null,
       },
-      orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
+      include: issueWithTypeInclude,
+      orderBy: [{ rank_position: 'asc' }, { created_at: 'asc' }],
     });
   }
 
-  async listInScope(client: PrismaExecutor, scope: IssueListScope): Promise<issues[]> {
+  async listInScope(client: PrismaExecutor, scope: IssueListScope): Promise<IssueEntity[]> {
     return client.issues.findMany({
       where: this.buildScopeWhere(scope),
-      orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
+      include: issueWithTypeInclude,
+      orderBy: [{ rank_position: 'asc' }, { created_at: 'asc' }],
     });
   }
 
@@ -79,14 +91,29 @@ export class IssuesRepository {
     const aggregate = await client.issues.aggregate({
       where: this.buildScopeWhere(scope),
       _max: {
-        position: true,
+        rank_position: true,
       },
     });
 
-    return (aggregate._max.position ?? -1) + 1;
+    return Math.trunc(rankPositionToNumber(aggregate._max.rank_position)) + 1;
   }
 
-  scopeForIssue(issue: issues): IssueListScope {
+  async getNextIssueNumber(client: PrismaExecutor, projectId: string): Promise<bigint> {
+    const aggregate = await client.issues.aggregate({
+      where: {
+        project_id: projectId,
+      },
+      _max: {
+        issue_number: true,
+      },
+    });
+
+    return (aggregate._max.issue_number ?? BigInt(0)) + BigInt(1);
+  }
+
+  scopeForIssue(
+    issue: Pick<IssueEntity, 'project_id' | 'sprint_id' | 'status_id'>,
+  ): IssueListScope {
     return {
       projectId: issue.project_id,
       sprintId: issue.sprint_id,
@@ -98,6 +125,7 @@ export class IssuesRepository {
     return {
       project_id: scope.projectId,
       sprint_id: scope.sprintId,
+      deleted_at: null,
       ...(scope.statusId !== undefined ? { status_id: scope.statusId } : {}),
     };
   }
