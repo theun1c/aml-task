@@ -8,5 +8,5 @@ export class MoveIssueToSprintDto {
   })
   @ValidateIf((_object, value) => value !== null)
   @IsUUID()
-  sprintId: string | null;
+  sprint_id: string | null;
 }

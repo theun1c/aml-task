@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
+import { rankPositionFromIndex, rankPositionToNumber } from '../issue-db-mappers';
 import { IssueEntity, IssueListScope } from '../issue.types';
 import { IssuesRepository } from '../repositories/issues.repository';
 
@@ -12,7 +13,7 @@ export class IssuesPositionService {
     const nextPosition = await this.issuesRepository.getNextPosition(tx, targetScope);
 
     const data: Prisma.issuesUncheckedUpdateInput = {
-      position: nextPosition,
+      rank_position: rankPositionFromIndex(nextPosition),
       updated_at: new Date(),
     };
 
@@ -62,7 +63,7 @@ export class IssuesPositionService {
 
     for (const [index, id] of ids.entries()) {
       await this.issuesRepository.updateTx(tx, id, {
-        position: index,
+        rank_position: rankPositionFromIndex(index),
         updated_at: new Date(),
       });
     }
@@ -84,12 +85,12 @@ export class IssuesPositionService {
     const issuesList = await this.issuesRepository.listInScope(tx, scope);
 
     for (const [index, issue] of issuesList.entries()) {
-      if (issue.position === index) {
+      if (rankPositionToNumber(issue.rank_position) === index) {
         continue;
       }
 
       await this.issuesRepository.updateTx(tx, issue.id, {
-        position: index,
+        rank_position: rankPositionFromIndex(index),
         updated_at: new Date(),
       });
     }

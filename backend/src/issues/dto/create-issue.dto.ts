@@ -27,7 +27,7 @@ export class CreateIssueDto {
 
   @ApiProperty({ enum: ISSUE_TYPE_VALUES, example: 'task' })
   @IsEnum(ISSUE_TYPE_VALUES)
-  type: IssueTypeValue;
+  type_code: IssueTypeValue;
 
   @ApiPropertyOptional({
     example: '47f5f4dc-8e52-44a1-9f08-a4ff5d9fdd53',
@@ -35,5 +35,5 @@ export class CreateIssueDto {
   })
   @IsOptional()
   @IsUUID()
-  assigneeId?: string | null;
+  assignee_id?: string | null;
 }

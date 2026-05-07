@@ -5,5 +5,5 @@ export class ReorderIssueDto {
   @ApiProperty({ example: 2, minimum: 0 })
   @IsInt()
   @Min(0)
-  targetIndex: number;
+  target_index: number;
 }
