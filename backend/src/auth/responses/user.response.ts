@@ -12,5 +12,5 @@ export class UserResponse {
 
   @ApiProperty({ example: 'Alex' })
   @IsString()
-  name: string;
+  full_name: string;
 }

@@ -4,9 +4,9 @@ import { ApiProperty } from '@nestjs/swagger';
 export class TokensResponse {
   @ApiProperty({ example: '<jwt-access-token>' })
   @IsString()
-  accessToken: string;
+  access_token: string;
 
   @ApiProperty({ example: '<jwt-refresh-token>' })
   @IsString()
-  refreshToken: string;
+  refresh_token: string;
 }

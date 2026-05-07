@@ -84,12 +84,12 @@ describe('AuthController (e2e)', () => {
 
   it('POST /api/auth/register should return 201 and auth payload for valid request', async () => {
     authServiceMock.register.mockResolvedValue({
-      accessToken: 'access',
-      refreshToken: 'refresh',
+      access_token: 'access',
+      refresh_token: 'refresh',
       user: {
         id: 'u1',
         email: 'user@example.com',
-        name: 'User',
+        full_name: 'User',
       },
     });
 
@@ -98,17 +98,17 @@ describe('AuthController (e2e)', () => {
       .send({
         email: 'user@example.com',
         password: 'strongPass123',
-        name: 'User Name',
+        full_name: 'User Name',
       })
       .expect(201)
       .expect(({ body }) => {
         expect(body).toEqual({
-          accessToken: 'access',
-          refreshToken: 'refresh',
+          access_token: 'access',
+          refresh_token: 'refresh',
           user: {
             id: 'u1',
             email: 'user@example.com',
-            name: 'User',
+            full_name: 'User',
           },
         });
       });
@@ -120,19 +120,19 @@ describe('AuthController (e2e)', () => {
       .send({
         email: 'not-an-email',
         password: 'strongPass123',
-        name: 'User Name',
+        full_name: 'User Name',
       })
       .expect(400);
   });
 
   it('POST /api/auth/login should return 200 and auth payload for valid request', async () => {
     authServiceMock.login.mockResolvedValue({
-      accessToken: 'access-login',
-      refreshToken: 'refresh-login',
+      access_token: 'access-login',
+      refresh_token: 'refresh-login',
       user: {
         id: 'u2',
         email: 'login@example.com',
-        name: 'Login User',
+        full_name: 'Login User',
       },
     });
 
@@ -145,18 +145,18 @@ describe('AuthController (e2e)', () => {
       .expect(200)
       .expect(({ body }) => {
         expect(body).toEqual({
-          accessToken: 'access-login',
-          refreshToken: 'refresh-login',
+          access_token: 'access-login',
+          refresh_token: 'refresh-login',
           user: {
             id: 'u2',
             email: 'login@example.com',
-            name: 'Login User',
+            full_name: 'Login User',
           },
         });
       });
   });
 
-  it('POST /api/auth/refresh should return 400 when refreshToken is missing', async () => {
+  it('POST /api/auth/refresh should return 400 when refresh_token is missing', async () => {
     await request(app.getHttpServer()).post('/api/auth/refresh').send({}).expect(400);
   });
 
@@ -173,7 +173,7 @@ describe('AuthController (e2e)', () => {
         expect(body).toEqual({
           id: authenticatedUser.id,
           email: authenticatedUser.email,
-          name: authenticatedUser.name,
+          full_name: authenticatedUser.name,
         });
       });
   });

@@ -36,7 +36,7 @@ export class AuthService {
     const userResponse = new UserResponse();
     userResponse.id = id;
     userResponse.email = email;
-    userResponse.name = name;
+    userResponse.full_name = name;
 
     return userResponse;
   }
@@ -46,8 +46,8 @@ export class AuthService {
   // for build resp
   private buildUserResponse(accessToken: string, refreshToken: string, user: UserResponse) {
     return {
-      accessToken: accessToken,
-      refreshToken: refreshToken,
+      access_token: accessToken,
+      refresh_token: refreshToken,
       user: user,
     };
   }
@@ -59,7 +59,7 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    const session = await this.prisma.sessions.create({
+    const session = await this.prisma.user_sessions.create({
       data: {
         user_id: id,
         refresh_token_hash: '',
@@ -76,11 +76,12 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    return this.prisma.sessions.update({
+    return this.prisma.user_sessions.update({
       where: {
         id: sessionId,
       },
       data: {
+        is_revoked: false,
         refresh_token_hash: refreshTokenHash,
         expires_at: expiresAt,
         revoked_at: null,
@@ -123,7 +124,7 @@ export class AuthService {
       data: {
         email: email,
         password_hash: passwordHash,
-        name: trimmedName,
+        full_name: trimmedName,
       },
     });
 
@@ -145,14 +146,18 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const createdUser = await this.createUser(emailNormalized, dto.password, dto.name);
+    const createdUser = await this.createUser(emailNormalized, dto.password, dto.full_name);
 
     const { accessToken, refreshToken } = await this.issueTokensForUser({
       id: createdUser.id,
       email: createdUser.email,
     });
 
-    const userResponse = this.toUserResponse(createdUser.id, createdUser.email, createdUser.name);
+    const userResponse = this.toUserResponse(
+      createdUser.id,
+      createdUser.email,
+      createdUser.full_name,
+    );
 
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
@@ -183,7 +188,7 @@ export class AuthService {
       email: user.email,
     });
 
-    const userResponse = this.toUserResponse(user.id, user.email, user.name);
+    const userResponse = this.toUserResponse(user.id, user.email, user.full_name);
 
     return this.buildUserResponse(accessToken, refreshToken, userResponse);
   }
@@ -191,7 +196,7 @@ export class AuthService {
   // BL
   // REFRESH
   async refresh(dto: RefreshDto): Promise<TokensResponse> {
-    const incomingRefreshToken = dto.refreshToken;
+    const incomingRefreshToken = dto.refresh_token;
 
     let payload: RefreshTokenPayload;
     try {
@@ -200,7 +205,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const session = await this.prisma.sessions.findUnique({
+    const session = await this.prisma.user_sessions.findUnique({
       where: {
         id: payload.sid,
       },
@@ -221,7 +226,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    if (session.revoked_at) {
+    if (session.is_revoked || session.revoked_at) {
       throw new UnauthorizedException('Session revoked');
     }
 
@@ -249,17 +254,18 @@ export class AuthService {
     await this.updateSessionRefreshToken(session.id, refreshToken);
 
     return {
-      accessToken,
-      refreshToken,
+      access_token: accessToken,
+      refresh_token: refreshToken,
     };
   }
 
   async logoutCurrentSession(sessionId: string): Promise<void> {
-    await this.prisma.sessions.update({
+    await this.prisma.user_sessions.update({
       where: {
         id: sessionId,
       },
       data: {
+        is_revoked: true,
         revoked_at: new Date(),
         updated_at: new Date(),
       },
@@ -267,12 +273,14 @@ export class AuthService {
   }
 
   async logoutAllSessions(userId: string): Promise<void> {
-    await this.prisma.sessions.updateMany({
+    await this.prisma.user_sessions.updateMany({
       where: {
         user_id: userId,
+        is_revoked: false,
         revoked_at: null,
       },
       data: {
+        is_revoked: true,
         revoked_at: new Date(),
         updated_at: new Date(),
       },
@@ -280,9 +288,10 @@ export class AuthService {
   }
 
   async getSessions(userId: string) {
-    return this.prisma.sessions.findMany({
+    return this.prisma.user_sessions.findMany({
       where: {
         user_id: userId,
+        is_revoked: false,
         revoked_at: null,
         expires_at: {
           gt: new Date(), // ?
