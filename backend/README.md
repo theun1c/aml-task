@@ -4,6 +4,67 @@ Backend для AML Task Manager.
 
 Сейчас это NestJS API с Prisma/PostgreSQL, Swagger-документацией и базовым модулем авторизации.
 
+## Локальная dev-разработка
+
+Проект работает в режиме `remote-db only`: backend запускается локально, а Prisma и приложение подключаются к удаленной PostgreSQL через SSH-туннель.
+
+Основные файлы:
+
+- `.env.prod` — основной env-файл для подключения к удаленной БД через локальный SSH-туннель.
+- `Makefile` — основной entrypoint для dev-команд.
+- `.env.example` — шаблон переменных для remote DB режима.
+
+Рекомендуемый сценарий запуска:
+
+```bash
+make ssh-tunnel
+```
+
+В отдельном терминале:
+
+```bash
+make sync-db-schema
+make start-dev
+```
+
+Что делает этот flow:
+
+- выполняет `prisma db pull`;
+- выполняет `prisma generate`;
+- запускает backend через `npm run start:dev` против удаленной БД.
+
+Полезные dev-команды:
+
+- `make ssh-tunnel` — открыть SSH-туннель к удаленной PostgreSQL.
+- `make sync-db-schema` — подтянуть актуальную схему из БД и пересобрать Prisma Client.
+- `make start-dev` — запустить backend локально.
+- `make develop` — выполнить `sync-db-schema`, затем запустить backend.
+
+Если `ENV_FILE` не передан явно, в `Makefile` по умолчанию используется `.env.prod`.
+
+## Подключение к удаленной БД
+
+База данных на сервере недоступна напрямую извне, поэтому подключение идет через SSH-туннель:
+
+```text
+localhost:5433 on your machine
+-> SSH tunnel
+-> 127.0.0.1:5432 on the server
+-> PostgreSQL
+```
+
+Пример:
+
+```bash
+ssh -L 5433:127.0.0.1:5432 theun1c@194.156.118.99
+```
+
+После этого `DATABASE_URL` в `.env.prod` может оставаться в формате:
+
+```env
+DATABASE_URL=postgresql://aml_user:root123@localhost:5433/aml_db?schema=aml_task
+```
+
 ## Где доступен backend
 
 - Swagger / API docs: [http://194.156.118.99/api/docs](http://194.156.118.99/api/docs)
@@ -74,38 +135,26 @@ src/
 
 ## Какие модули уже есть в проекте
 
-### Реально используются сейчас
-
 - `auth`
 - `infrastructure/prisma`
 - `health`
-
-### Подготовлены как каркас для следующей разработки
-
 - `users`
-- `projects`
 - `issues`
-- `comments`
-- `common`
-- `infrastructure/config`
 
 ## Ближайшие задачи
 
 Важное:
-- настроить сертификаты и HTTPS через nginx;
-- получить домен;
-- продолжить развитие backend-модулей кроме `auth`.
+- продолжить развитие backend-модулей кроме `auth`;
+- стабилизировать flow синхронизации Prisma со схемой удаленной БД;
+- почистить проект от лишних dev-артефактов.
 
 Технический следующий шаг:
 - разгрузить `AuthService`;
 - начать выносить повторяющиеся Prisma-запросы в `repositories`;
 - описать деплой backend;
-- протестировать сервер на нагрузку и отказоустойчивость;
-- почистить проект от лишних файлов и временных артефактов.
+- протестировать сервер на нагрузку и отказоустойчивость.
 
 ## Документация
 
 - Архитектура: [docs/product/ARCHITECTURE.md](docs/product/ARCHITECTURE.md)
 - Техническое задание: [docs/product/TECH_SPEC.md](docs/product/TECH_SPEC.md)
-- Спецификация auth: [docs/codex/features/001-auth/SPEC.md](docs/codex/features/001-auth/SPEC.md)
-- Задачи по auth: [docs/codex/features/001-auth/TASKS.md](docs/codex/features/001-auth/TASKS.md)

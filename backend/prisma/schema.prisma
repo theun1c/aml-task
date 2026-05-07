@@ -1,6 +1,7 @@
 generator client {
   provider               = "prisma-client"
   output                 = "../generated/prisma"
+  previewFeatures        = ["partialIndexes"]
   generatedFileExtension = "ts"
   moduleFormat           = "cjs"
   runtime                = "nodejs"
@@ -11,26 +12,396 @@ datasource db {
 }
 
 model users {
-  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email         String     @unique(map: "users_email_unique_idx")
-  password_hash String
-  name          String
-  updated_at    DateTime?  @db.Timestamptz(6)
-  created_at    DateTime   @default(now()) @db.Timestamptz(6)
-  sessions      sessions[]
+  id                               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                            String                 @unique @db.Citext
+  password_hash                    String
+  full_name                        String                 @db.VarChar(200)
+  avatar_url                       String?
+  settings                         Json                   @default("{}")
+  is_active                        Boolean                @default(true)
+  last_login_at                    DateTime?              @db.Timestamptz(6)
+  row_version                      BigInt                 @default(1)
+  created_at                       DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime               @default(now()) @db.Timestamptz(6)
+  deleted_at                       DateTime?              @db.Timestamptz(6)
+  first_name                       String?                @db.VarChar(100)
+  last_name                        String?                @db.VarChar(100)
+  activity_log                     activity_log[]
+  attachments                      attachments[]
+  audit_log                        audit_log[]
+  comments                         comments[]
+  issue_relations                  issue_relations[]
+  issue_status_history             issue_status_history[]
+  issue_watchers                   issue_watchers[]
+  issues_issues_assignee_idTousers issues[]               @relation("issues_assignee_idTousers")
+  issues_issues_reporter_idTousers issues[]               @relation("issues_reporter_idTousers")
+  notifications                    notifications[]
+  project_invitations              project_invitations[]
+  project_members                  project_members[]
+  projects                         projects[]
+  time_logs                        time_logs[]
+  user_sessions                    user_sessions[]
+
+  @@index([deleted_at], map: "ix_users_deleted_at")
+  @@index([is_active], map: "ix_users_is_active", where: raw("(deleted_at IS NULL)"))
 }
 
-model sessions {
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model issues {
+  id                                                      String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id                                              String                 @db.Uuid
+  issue_number                                            BigInt
+  type_id                                                 Int                    @db.SmallInt
+  status_id                                               String                 @db.Uuid
+  sprint_id                                               String?                @db.Uuid
+  parent_issue_id                                         String?                @db.Uuid
+  title                                                   String                 @db.VarChar(500)
+  description                                             String?
+  reporter_id                                             String                 @db.Uuid
+  assignee_id                                             String?                @db.Uuid
+  priority                                                String                 @default("medium") @db.VarChar(20)
+  story_points                                            Decimal?               @db.Decimal(5, 2)
+  due_date                                                DateTime?              @db.Date
+  rank_position                                           Decimal?               @db.Decimal(20, 10)
+  original_estimate_minutes                               Int?
+  remaining_estimate_minutes                              Int?
+  row_version                                             BigInt                 @default(1)
+  created_at                                              DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                                              DateTime               @default(now()) @db.Timestamptz(6)
+  deleted_at                                              DateTime?              @db.Timestamptz(6)
+  attachments                                             attachments[]
+  comments                                                comments[]
+  issue_relations_issue_relations_source_issue_idToissues issue_relations[]      @relation("issue_relations_source_issue_idToissues")
+  issue_relations_issue_relations_target_issue_idToissues issue_relations[]      @relation("issue_relations_target_issue_idToissues")
+  issue_status_history                                    issue_status_history[]
+  issue_watchers                                          issue_watchers[]
+  users_issues_assignee_idTousers                         users?                 @relation("issues_assignee_idTousers", fields: [assignee_id], references: [id], onUpdate: Restrict, map: "fk_issues_assignee")
+  issues                                                  issues?                @relation("issuesToissues", fields: [parent_issue_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_issues_parent")
+  other_issues                                            issues[]               @relation("issuesToissues")
+  projects                                                projects               @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_issues_project")
+  users_issues_reporter_idTousers                         users                  @relation("issues_reporter_idTousers", fields: [reporter_id], references: [id], onUpdate: Restrict, map: "fk_issues_reporter")
+  sprints                                                 sprints?               @relation(fields: [sprint_id], references: [id], onUpdate: Restrict, map: "fk_issues_sprint")
+  statuses                                                statuses               @relation(fields: [status_id], references: [id], onUpdate: Restrict, map: "fk_issues_status")
+  issue_types                                             issue_types            @relation(fields: [type_id], references: [id], onUpdate: Restrict, map: "fk_issues_type")
+  time_logs                                               time_logs[]
+
+  @@unique([project_id, issue_number], map: "uq_issues_project_issue_number")
+  @@index([assignee_id], map: "ix_issues_assignee_id")
+  @@index([project_id], map: "ix_issues_project_id")
+  @@index([deleted_at], map: "ix_issues_deleted_at")
+  @@index([due_date], map: "ix_issues_due_date")
+  @@index([parent_issue_id], map: "ix_issues_parent_issue_id")
+  @@index([priority], map: "ix_issues_priority")
+  @@index([project_id, sprint_id, status_id], map: "ix_issues_project_sprint_status", where: raw("(deleted_at IS NULL)"))
+  @@index([project_id, status_id, assignee_id], map: "ix_issues_project_status_assignee", where: raw("(deleted_at IS NULL)"))
+  @@index([project_id, rank_position], map: "ix_issues_rank_position", where: raw("(deleted_at IS NULL)"))
+  @@index([reporter_id], map: "ix_issues_reporter_id")
+  @@index([sprint_id], map: "ix_issues_sprint_id")
+  @@index([status_id], map: "ix_issues_status_id")
+  @@index([type_id], map: "ix_issues_type_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model project_members {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id String    @db.Uuid
+  user_id    String    @db.Uuid
+  role       String    @db.VarChar(20)
+  is_active  Boolean   @default(true)
+  joined_at  DateTime  @default(now()) @db.Timestamptz(6)
+  left_at    DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  projects   projects  @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_project_members_project")
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_project_members_user")
+
+  @@unique([project_id, user_id], map: "uq_project_members_project_user")
+  @@index([user_id], map: "ix_project_members_user_id")
+  @@index([project_id], map: "ix_project_members_project_id")
+  @@index([role], map: "ix_project_members_role")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model projects {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String                @unique(map: "uq_projects_name") @db.VarChar(200)
+  project_key         String                @unique(map: "uq_projects_project_key") @db.VarChar(20)
+  description         String?
+  owner_id            String                @db.Uuid
+  is_archived         Boolean               @default(false)
+  row_version         BigInt                @default(1)
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  deleted_at          DateTime?             @db.Timestamptz(6)
+  activity_log        activity_log[]
+  issues              issues[]
+  project_invitations project_invitations[]
+  project_members     project_members[]
+  users               users                 @relation(fields: [owner_id], references: [id], onUpdate: Restrict, map: "fk_projects_owner")
+  sprints             sprints[]
+  statuses            statuses[]
+
+  @@index([deleted_at], map: "ix_projects_deleted_at")
+  @@index([is_archived], map: "ix_projects_is_archived", where: raw("(deleted_at IS NULL)"))
+  @@index([owner_id], map: "ix_projects_owner_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sprints {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id   String    @db.Uuid
+  name         String    @db.VarChar(150)
+  goal         String?
+  status       String    @default("planned") @db.VarChar(20)
+  start_date   DateTime? @db.Date
+  end_date     DateTime? @db.Date
+  completed_at DateTime? @db.Timestamptz(6)
+  row_version  BigInt    @default(1)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+  issues       issues[]
+  projects     projects  @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_sprints_project")
+
+  @@unique([project_id, name], map: "uq_sprints_project_name")
+  @@index([project_id, status], map: "ix_sprints_project_status")
+  @@index([project_id, start_date, end_date], map: "ix_sprints_dates")
+  @@index([project_id], map: "ix_sprints_project_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model statuses {
+  id                                                                 String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id                                                         String                 @db.Uuid
+  name                                                               String                 @db.VarChar(100)
+  category                                                           String                 @db.VarChar(20)
+  position                                                           Int
+  color                                                              String?                @db.VarChar(20)
+  is_default                                                         Boolean                @default(false)
+  is_final                                                           Boolean                @default(false)
+  row_version                                                        BigInt                 @default(1)
+  created_at                                                         DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                                                         DateTime               @default(now()) @db.Timestamptz(6)
+  issue_status_history_issue_status_history_from_status_idTostatuses issue_status_history[] @relation("issue_status_history_from_status_idTostatuses")
+  issue_status_history_issue_status_history_to_status_idTostatuses   issue_status_history[] @relation("issue_status_history_to_status_idTostatuses")
+  issues                                                             issues[]
+  projects                                                           projects               @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_statuses_project")
+
+  @@unique([project_id, name], map: "uq_statuses_project_name")
+  @@unique([project_id, position], map: "uq_statuses_project_position")
+  @@index([project_id, category], map: "ix_statuses_project_category")
+  @@index([project_id], map: "ix_statuses_project_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model activity_log {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id    String?   @db.Uuid
+  entity_type   String    @db.VarChar(50)
+  entity_id     String    @db.Uuid
+  action        String    @db.VarChar(50)
+  actor_user_id String?   @db.Uuid
+  details       Json      @default("{}")
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  users         users?    @relation(fields: [actor_user_id], references: [id], onUpdate: Restrict, map: "fk_activity_log_actor")
+  projects      projects? @relation(fields: [project_id], references: [id], onUpdate: Restrict, map: "fk_activity_log_project")
+
+  @@index([actor_user_id], map: "ix_activity_log_actor_user_id")
+  @@index([created_at], map: "ix_activity_log_created_at")
+  @@index([entity_type, entity_id], map: "ix_activity_log_entity")
+  @@index([project_id], map: "ix_activity_log_project_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model attachments {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id        String   @db.Uuid
+  uploaded_by     String   @db.Uuid
+  file_name       String   @db.VarChar(255)
+  file_url        String
+  mime_type       String?  @db.VarChar(150)
+  file_size_bytes BigInt
+  checksum_sha256 String?  @db.Char(64)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  issues          issues   @relation(fields: [issue_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_attachments_issue")
+  users           users    @relation(fields: [uploaded_by], references: [id], onUpdate: Restrict, map: "fk_attachments_uploaded_by")
+
+  @@index([issue_id], map: "ix_attachments_issue_id")
+  @@index([uploaded_by], map: "ix_attachments_uploaded_by")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model audit_log {
+  id             BigInt   @id @default(autoincrement())
+  table_name     String   @db.VarChar(100)
+  operation      String   @db.VarChar(10)
+  record_pk      Json?
+  old_data       Json?
+  new_data       Json?
+  changed_by     String?  @db.Uuid
+  changed_at     DateTime @default(now()) @db.Timestamptz(6)
+  transaction_id BigInt   @default(dbgenerated("txid_current()"))
+  users          users?   @relation(fields: [changed_by], references: [id], onUpdate: Restrict, map: "fk_audit_log_changed_by")
+
+  @@index([changed_at], map: "ix_audit_log_changed_at")
+  @@index([changed_by], map: "ix_audit_log_changed_by")
+  @@index([record_pk], map: "ix_audit_log_record_pk", type: Gin)
+  @@index([table_name], map: "ix_audit_log_table_name")
+  @@index([transaction_id], map: "ix_audit_log_transaction_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model comments {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id    String    @db.Uuid
+  author_id   String    @db.Uuid
+  content     String
+  row_version BigInt    @default(1)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
+  deleted_at  DateTime? @db.Timestamptz(6)
+  users       users     @relation(fields: [author_id], references: [id], onUpdate: Restrict, map: "fk_comments_author")
+  issues      issues    @relation(fields: [issue_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_comments_issue")
+
+  @@index([author_id], map: "ix_comments_author_id")
+  @@index([deleted_at], map: "ix_comments_deleted_at")
+  @@index([issue_id], map: "ix_comments_issue_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model issue_relations {
+  id                                             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source_issue_id                                String   @db.Uuid
+  target_issue_id                                String   @db.Uuid
+  relation_type                                  String   @db.VarChar(30)
+  created_by                                     String   @db.Uuid
+  created_at                                     DateTime @default(now()) @db.Timestamptz(6)
+  users                                          users    @relation(fields: [created_by], references: [id], onUpdate: Restrict, map: "fk_issue_relations_created_by")
+  issues_issue_relations_source_issue_idToissues issues   @relation("issue_relations_source_issue_idToissues", fields: [source_issue_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_issue_relations_source")
+  issues_issue_relations_target_issue_idToissues issues   @relation("issue_relations_target_issue_idToissues", fields: [target_issue_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_issue_relations_target")
+
+  @@unique([source_issue_id, target_issue_id, relation_type], map: "uq_issue_relations_pair_type")
+  @@index([relation_type], map: "ix_issue_relations_relation_type")
+  @@index([source_issue_id], map: "ix_issue_relations_source_issue_id")
+  @@index([target_issue_id], map: "ix_issue_relations_target_issue_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model issue_status_history {
+  id                                                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id                                               String    @db.Uuid
+  from_status_id                                         String?   @db.Uuid
+  to_status_id                                           String    @db.Uuid
+  changed_by                                             String    @db.Uuid
+  entered_at                                             DateTime  @default(now()) @db.Timestamptz(6)
+  left_at                                                DateTime? @db.Timestamptz(6)
+  comment                                                String?
+  users                                                  users     @relation(fields: [changed_by], references: [id], onUpdate: Restrict, map: "fk_issue_status_history_changed_by")
+  statuses_issue_status_history_from_status_idTostatuses statuses? @relation("issue_status_history_from_status_idTostatuses", fields: [from_status_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_issue_status_history_from_status")
+  issues                                                 issues    @relation(fields: [issue_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_issue_status_history_issue")
+  statuses_issue_status_history_to_status_idTostatuses   statuses  @relation("issue_status_history_to_status_idTostatuses", fields: [to_status_id], references: [id], onUpdate: Restrict, map: "fk_issue_status_history_to_status")
+
+  @@index([changed_by], map: "ix_issue_status_history_changed_by")
+  @@index([entered_at], map: "ix_issue_status_history_entered_at")
+  @@index([issue_id], map: "ix_issue_status_history_issue_id")
+  @@index([to_status_id], map: "ix_issue_status_history_to_status_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model issue_types {
+  id                 Int      @id @default(autoincrement()) @db.SmallInt
+  code               String   @unique @db.VarChar(30)
+  name               String   @unique @db.VarChar(100)
+  description        String?
+  icon               String?  @db.VarChar(100)
+  is_subtask_allowed Boolean  @default(true)
+  issues             issues[]
+}
+
+model issue_watchers {
+  issue_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  issues     issues   @relation(fields: [issue_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_issue_watchers_issue")
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_issue_watchers_user")
+
+  @@id([issue_id, user_id], map: "pk_issue_watchers")
+  @@index([user_id], map: "ix_issue_watchers_user_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model notifications {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String    @db.Uuid
+  notification_type String    @db.VarChar(50)
+  title             String    @db.VarChar(200)
+  payload           Json      @default("{}")
+  is_read           Boolean   @default(false)
+  read_at           DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  users             users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_notifications_user")
+
+  @@index([created_at], map: "ix_notifications_created_at")
+  @@index([user_id], map: "ix_notifications_user_id")
+  @@index([user_id, is_read], map: "ix_notifications_user_is_read")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model project_invitations {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id  String    @db.Uuid
+  email       String    @db.Citext
+  invited_by  String    @db.Uuid
+  role        String    @default("member") @db.VarChar(20)
+  token       String    @unique(map: "uq_project_invitations_token") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status      String    @default("pending") @db.VarChar(20)
+  expires_at  DateTime  @db.Timestamptz(6)
+  accepted_at DateTime? @db.Timestamptz(6)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  users       users     @relation(fields: [invited_by], references: [id], onUpdate: Restrict, map: "fk_project_invitations_invited_by")
+  projects    projects  @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_project_invitations_project")
+
+  @@unique([project_id, email], map: "uq_project_invitations_project_email")
+  @@index([email], map: "ix_project_invitations_email")
+  @@index([expires_at], map: "ix_project_invitations_expires_at")
+  @@index([project_id], map: "ix_project_invitations_project_id")
+  @@index([status], map: "ix_project_invitations_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model time_logs {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id           String   @db.Uuid
+  user_id            String   @db.Uuid
+  work_date          DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+  time_spent_minutes Int
+  description        String?
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  issues             issues   @relation(fields: [issue_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_time_logs_issue")
+  users              users    @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_time_logs_user")
+
+  @@index([issue_id], map: "ix_time_logs_issue_id")
+  @@index([user_id], map: "ix_time_logs_user_id")
+  @@index([work_date], map: "ix_time_logs_work_date")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_sessions {
   id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id            String    @db.Uuid
-  refresh_token_hash String
-  expires_at         DateTime  @db.Timestamptz(6)
+  refresh_token_hash String    @unique(map: "uq_user_sessions_refresh_token_hash")
+  device_info        String?
+  ip_address         String?   @db.Inet
+  user_agent         String?
+  is_revoked         Boolean   @default(false)
   revoked_at         DateTime? @db.Timestamptz(6)
-  updated_at         DateTime? @db.Timestamptz(6)
+  expires_at         DateTime  @db.Timestamptz(6)
+  last_used_at       DateTime? @db.Timestamptz(6)
   created_at         DateTime  @default(now()) @db.Timestamptz(6)
-  users              users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  updated_at         DateTime  @default(now()) @db.Timestamptz(6)
+  users              users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_user_sessions_user")
 
-  @@index([expires_at])
-  @@index([revoked_at])
-  @@index([user_id])
+  @@index([user_id, is_revoked, expires_at], map: "ix_user_sessions_active")
+  @@index([expires_at], map: "ix_user_sessions_expires_at")
+  @@index([last_used_at], map: "ix_user_sessions_last_used_at")
+  @@index([user_id], map: "ix_user_sessions_user_id")
 }

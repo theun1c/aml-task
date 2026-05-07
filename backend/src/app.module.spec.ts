@@ -18,16 +18,26 @@ jest.mock(
   }),
   { virtual: true },
 );
+jest.mock(
+  './issues/issues.module',
+  () => ({
+    IssuesModule: class IssuesModule {},
+  }),
+  { virtual: true },
+);
 
 import { AppModule } from './app.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
+import { IssuesModule } from './issues/issues.module';
 
 describe('AppModule', () => {
   it('should import domain modules and infrastructure modules', () => {
     const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, AppModule) ?? [];
 
-    expect(imports).toEqual(expect.arrayContaining([AuthModule, UsersModule, PrismaModule]));
+    expect(imports).toEqual(
+      expect.arrayContaining([AuthModule, UsersModule, PrismaModule, IssuesModule]),
+    );
   });
 });

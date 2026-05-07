@@ -32,7 +32,7 @@ describe('AuthController', () => {
     expect(result).toEqual({
       id: 'user-1',
       email: 'user@example.com',
-      name: 'User Name',
+      full_name: 'User Name',
     });
   });
 });
