@@ -50,12 +50,19 @@
 
 ## Основные сущности MVP
 - users
+- user_sessions
 - projects
 - project_members
 - statuses
 - sprints
 - issues
 - comments
+
+Дополнительно в текущей схеме уже присутствуют lookup/support таблицы, на которые backend-код должен опираться напрямую:
+- issue_types
+- attachments
+- notifications
+- project_invitations
 
 ---
 
@@ -64,6 +71,7 @@
 ### Пользователи
 - регистрация по email + password
 - логин по email + password
+- активные refresh-сессии хранятся в `user_sessions`
 
 ### Проекты
 - проект имеет owner
@@ -86,6 +94,7 @@
 - типы задач:
   - task
   - bug
+- в БД тип хранится через `issue_types`, а порядок через `rank_position`
 - статус задачи определяется колонкой
 - задача может быть без спринта (backlog)
 
@@ -103,6 +112,7 @@
 - доступ к БД через Prisma
 - DTO валидируются
 - права доступа проверяются явно
+- публичный REST API использует `snake_case`, согласованный с БД и Prisma-схемой
 
 ### Предпочтительная структура модулей
 - auth
