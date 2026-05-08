@@ -9,6 +9,7 @@ import { IssuesModule } from './issues/issues.module';
 import { ProjectsModule } from './projects/projects.module';
 import { StatusesModule } from './statuses/statuses.module';
 import { SprintsModule } from './sprints/sprints.module';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { SprintsModule } from './sprints/sprints.module';
     ProjectsModule,
     StatusesModule,
     SprintsModule,
+    CommentsModule,
   ],
   controllers: [HealthController],
 })
