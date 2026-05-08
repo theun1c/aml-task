@@ -5,6 +5,7 @@ generator client {
   generatedFileExtension = "ts"
   moduleFormat           = "cjs"
   runtime                = "nodejs"
+  importFileExtension    = "ts"
 }
 
 datasource db {
