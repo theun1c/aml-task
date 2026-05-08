@@ -8,6 +8,7 @@ import { resolveEnvFilePath } from './infrastructure/config/env-file';
 import { IssuesModule } from './issues/issues.module';
 import { ProjectsModule } from './projects/projects.module';
 import { StatusesModule } from './statuses/statuses.module';
+import { SprintsModule } from './sprints/sprints.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { StatusesModule } from './statuses/statuses.module';
     IssuesModule,
     ProjectsModule,
     StatusesModule,
+    SprintsModule,
   ],
   controllers: [HealthController],
 })
