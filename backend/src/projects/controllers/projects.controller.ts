@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -58,9 +49,7 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Get current user projects' })
   @ApiOkResponse({ type: ProjectResponse, isArray: true })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  async getMyProjects(
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<ProjectResponse[]> {
+  async getMyProjects(@CurrentUser() user: AuthenticatedUser): Promise<ProjectResponse[]> {
     return this.projectsService.findAllForUser(this.getUserId(user));
   }
 

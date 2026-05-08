@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -51,12 +42,7 @@ export class CommentsController {
     @Param('issue_id') issueId: string,
     @Body() dto: CreateCommentDto,
   ): Promise<CommentResponse> {
-    return this.commentsService.create(
-      projectId,
-      issueId,
-      this.getUserId(user),
-      dto,
-    );
+    return this.commentsService.create(projectId, issueId, this.getUserId(user), dto);
   }
 
   @Get()
@@ -70,11 +56,7 @@ export class CommentsController {
     @Param('project_id') projectId: string,
     @Param('issue_id') issueId: string,
   ): Promise<CommentResponse[]> {
-    return this.commentsService.findAll(
-      projectId,
-      issueId,
-      this.getUserId(user),
-    );
+    return this.commentsService.findAll(projectId, issueId, this.getUserId(user));
   }
 
   @Patch(':comment_id')
@@ -92,13 +74,7 @@ export class CommentsController {
     @Param('comment_id') commentId: string,
     @Body() dto: UpdateCommentDto,
   ): Promise<CommentResponse> {
-    return this.commentsService.update(
-      projectId,
-      issueId,
-      commentId,
-      this.getUserId(user),
-      dto,
-    );
+    return this.commentsService.update(projectId, issueId, commentId, this.getUserId(user), dto);
   }
 
   @Delete(':comment_id')
@@ -115,12 +91,7 @@ export class CommentsController {
     @Param('issue_id') issueId: string,
     @Param('comment_id') commentId: string,
   ): Promise<CommentResponse> {
-    return this.commentsService.delete(
-      projectId,
-      issueId,
-      commentId,
-      this.getUserId(user),
-    );
+    return this.commentsService.delete(projectId, issueId, commentId, this.getUserId(user));
   }
 
   private getUserId(user: AuthenticatedUser): string {

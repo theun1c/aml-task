@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -88,12 +80,7 @@ export class StatusesController {
     @Param('status_id') statusId: string,
     @Body() dto: UpdateStatusDto,
   ): Promise<StatusResponse> {
-    return this.statusesService.update(
-      projectId,
-      statusId,
-      this.getUserId(user),
-      dto,
-    );
+    return this.statusesService.update(projectId, statusId, this.getUserId(user), dto);
   }
 
   private getUserId(user: AuthenticatedUser): string {

@@ -8,7 +8,11 @@ import { IssuesRepository } from '../repositories/issues.repository';
 export class IssuesPositionService {
   constructor(private readonly issuesRepository: IssuesRepository) {}
 
-  async appendToScope(tx: Prisma.TransactionClient, issue: IssueEntity, targetScope: IssueListScope) {
+  async appendToScope(
+    tx: Prisma.TransactionClient,
+    issue: IssueEntity,
+    targetScope: IssueListScope,
+  ) {
     const sourceScope = this.issuesRepository.scopeForIssue(issue);
     const nextPosition = await this.issuesRepository.getNextPosition(tx, targetScope);
 
@@ -81,7 +85,10 @@ export class IssuesPositionService {
     await this.normalizePositions(tx, this.issuesRepository.scopeForIssue(issue));
   }
 
-  private async normalizePositions(tx: Prisma.TransactionClient, scope: IssueListScope): Promise<void> {
+  private async normalizePositions(
+    tx: Prisma.TransactionClient,
+    scope: IssueListScope,
+  ): Promise<void> {
     const issuesList = await this.issuesRepository.listInScope(tx, scope);
 
     for (const [index, issue] of issuesList.entries()) {

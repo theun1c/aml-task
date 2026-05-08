@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { ProjectsService } from '../../projects/services/projects.service';
 import { CreateStatusDto } from '../dto/create-status.dto';
@@ -16,10 +12,7 @@ export class StatusesService {
     private readonly projectsService: ProjectsService,
   ) {}
 
-  async findAll(
-    projectId: string,
-    userId: string,
-  ): Promise<StatusResponse[]> {
+  async findAll(projectId: string, userId: string): Promise<StatusResponse[]> {
     await this.projectsService.ensureProjectMember(projectId, userId);
 
     const statuses = await this.prisma.statuses.findMany({
@@ -34,11 +27,7 @@ export class StatusesService {
     return statuses.map((status) => this.toStatusResponse(status));
   }
 
-  async create(
-    projectId: string,
-    userId: string,
-    dto: CreateStatusDto,
-  ): Promise<StatusResponse> {
+  async create(projectId: string, userId: string, dto: CreateStatusDto): Promise<StatusResponse> {
     await this.projectsService.ensureProjectOwner(projectId, userId);
 
     try {
@@ -68,9 +57,7 @@ export class StatusesService {
       return this.toStatusResponse(status);
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
-        throw new ConflictException(
-          'Status with this name or position already exists in project',
-        );
+        throw new ConflictException('Status with this name or position already exists in project');
       }
 
       throw error;
@@ -105,9 +92,7 @@ export class StatusesService {
       return this.toStatusResponse(status);
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
-        throw new ConflictException(
-          'Status with this name or position already exists in project',
-        );
+        throw new ConflictException('Status with this name or position already exists in project');
       }
 
       throw error;
@@ -156,11 +141,6 @@ export class StatusesService {
   }
 
   private isUniqueConstraintError(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'P2002'
-    );
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
   }
 }

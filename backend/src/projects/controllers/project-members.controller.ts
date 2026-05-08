@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -65,11 +57,7 @@ export class ProjectMembersController {
     @Param('project_id') projectId: string,
     @Body() dto: AddProjectMemberDto,
   ): Promise<ProjectMemberResponse> {
-    return this.projectMembersService.addMember(
-      projectId,
-      this.getUserId(user),
-      dto,
-    );
+    return this.projectMembersService.addMember(projectId, this.getUserId(user), dto);
   }
 
   @Delete(':user_id')
@@ -85,11 +73,7 @@ export class ProjectMembersController {
     @Param('project_id') projectId: string,
     @Param('user_id') targetUserId: string,
   ): Promise<ProjectMemberResponse> {
-    return this.projectMembersService.removeMember(
-      projectId,
-      this.getUserId(user),
-      targetUserId,
-    );
+    return this.projectMembersService.removeMember(projectId, this.getUserId(user), targetUserId);
   }
 
   private getUserId(user: AuthenticatedUser): string {

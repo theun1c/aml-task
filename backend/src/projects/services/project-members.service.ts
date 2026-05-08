@@ -16,10 +16,7 @@ export class ProjectMembersService {
     private readonly projectsService: ProjectsService,
   ) {}
 
-  async findAll(
-    projectId: string,
-    currentUserId: string,
-  ): Promise<ProjectMemberResponse[]> {
+  async findAll(projectId: string, currentUserId: string): Promise<ProjectMemberResponse[]> {
     await this.projectsService.ensureProjectMember(projectId, currentUserId);
 
     const members = await this.prisma.project_members.findMany({
@@ -123,10 +120,7 @@ export class ProjectMembersService {
     currentUserId: string,
     targetUserId: string,
   ): Promise<ProjectMemberResponse> {
-    const project = await this.projectsService.ensureProjectOwner(
-      projectId,
-      currentUserId,
-    );
+    const project = await this.projectsService.ensureProjectOwner(projectId, currentUserId);
 
     if (project.owner_id === targetUserId) {
       throw new ForbiddenException('Project owner cannot be removed');

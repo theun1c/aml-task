@@ -13,10 +13,7 @@ import { ProjectResponse } from '../responses/project.response';
 export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(
-    userId: string,
-    dto: CreateProjectDto,
-  ): Promise<ProjectResponse> {
+  async create(userId: string, dto: CreateProjectDto): Promise<ProjectResponse> {
     try {
       const project = await this.prisma.$transaction(async (tx) => {
         const createdProject = await tx.projects.create({
@@ -74,9 +71,7 @@ export class ProjectsService {
       return this.toProjectResponse(project);
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
-        throw new ConflictException(
-          'Project with this name or project key already exists',
-        );
+        throw new ConflictException('Project with this name or project key already exists');
       }
 
       throw error;
@@ -102,10 +97,7 @@ export class ProjectsService {
     return projects.map((project) => this.toProjectResponse(project));
   }
 
-  async findByIdForUser(
-    projectId: string,
-    userId: string,
-  ): Promise<ProjectResponse> {
+  async findByIdForUser(projectId: string, userId: string): Promise<ProjectResponse> {
     await this.ensureProjectMember(projectId, userId);
 
     const project = await this.findProjectEntityOrThrow(projectId);
@@ -113,11 +105,7 @@ export class ProjectsService {
     return this.toProjectResponse(project);
   }
 
-  async update(
-    projectId: string,
-    userId: string,
-    dto: UpdateProjectDto,
-  ): Promise<ProjectResponse> {
+  async update(projectId: string, userId: string, dto: UpdateProjectDto): Promise<ProjectResponse> {
     await this.ensureProjectOwner(projectId, userId);
 
     try {
@@ -127,12 +115,8 @@ export class ProjectsService {
         },
         data: {
           ...(dto.name !== undefined ? { name: dto.name } : {}),
-          ...(dto.description !== undefined
-            ? { description: dto.description }
-            : {}),
-          ...(dto.is_archived !== undefined
-            ? { is_archived: dto.is_archived }
-            : {}),
+          ...(dto.description !== undefined ? { description: dto.description } : {}),
+          ...(dto.is_archived !== undefined ? { is_archived: dto.is_archived } : {}),
           updated_at: new Date(),
         },
       });
@@ -230,11 +214,6 @@ export class ProjectsService {
   }
 
   private isUniqueConstraintError(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'P2002'
-    );
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
   }
 }

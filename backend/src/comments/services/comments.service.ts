@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { ProjectsService } from '../../projects/services/projects.service';
 import { CreateCommentDto } from '../dto/create-comment.dto';
@@ -44,11 +40,7 @@ export class CommentsService {
     return this.toCommentResponse(comment);
   }
 
-  async findAll(
-    projectId: string,
-    issueId: string,
-    userId: string,
-  ): Promise<CommentResponse[]> {
+  async findAll(projectId: string, issueId: string, userId: string): Promise<CommentResponse[]> {
     await this.projectsService.ensureProjectMember(projectId, userId);
     await this.ensureIssueBelongsToProject(projectId, issueId);
 
@@ -146,10 +138,7 @@ export class CommentsService {
     return this.toCommentResponse(deletedComment);
   }
 
-  private async ensureIssueBelongsToProject(
-    projectId: string,
-    issueId: string,
-  ) {
+  private async ensureIssueBelongsToProject(projectId: string, issueId: string) {
     const issue = await this.prisma.issues.findFirst({
       where: {
         id: issueId,

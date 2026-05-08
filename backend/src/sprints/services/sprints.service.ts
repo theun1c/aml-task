@@ -16,11 +16,7 @@ export class SprintsService {
     private readonly projectsService: ProjectsService,
   ) {}
 
-  async create(
-    projectId: string,
-    userId: string,
-    dto: CreateSprintDto,
-  ): Promise<SprintResponse> {
+  async create(projectId: string, userId: string, dto: CreateSprintDto): Promise<SprintResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
 
     try {
@@ -60,10 +56,7 @@ export class SprintsService {
     return sprints.map((sprint) => this.toSprintResponse(sprint));
   }
 
-  async findActive(
-    projectId: string,
-    userId: string,
-  ): Promise<SprintResponse | null> {
+  async findActive(projectId: string, userId: string): Promise<SprintResponse | null> {
     await this.projectsService.ensureProjectMember(projectId, userId);
 
     const sprint = await this.prisma.sprints.findFirst({
@@ -76,11 +69,7 @@ export class SprintsService {
     return sprint ? this.toSprintResponse(sprint) : null;
   }
 
-  async start(
-    projectId: string,
-    sprintId: string,
-    userId: string,
-  ): Promise<SprintResponse> {
+  async start(projectId: string, sprintId: string, userId: string): Promise<SprintResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
 
     const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
@@ -114,11 +103,7 @@ export class SprintsService {
     return this.toSprintResponse(updatedSprint);
   }
 
-  async complete(
-    projectId: string,
-    sprintId: string,
-    userId: string,
-  ): Promise<SprintResponse> {
+  async complete(projectId: string, sprintId: string, userId: string): Promise<SprintResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
 
     const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
@@ -211,11 +196,6 @@ export class SprintsService {
   }
 
   private isUniqueConstraintError(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'P2002'
-    );
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
   }
 }
