@@ -7,6 +7,7 @@ import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { resolveEnvFilePath } from './infrastructure/config/env-file';
 import { IssuesModule } from './issues/issues.module';
 import { ProjectsModule } from './projects/projects.module';
+import { StatusesModule } from './statuses/statuses.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ProjectsModule } from './projects/projects.module';
     UsersModule,
     IssuesModule,
     ProjectsModule,
+    StatusesModule,
   ],
   controllers: [HealthController],
 })
