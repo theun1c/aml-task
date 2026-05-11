@@ -172,6 +172,7 @@ export class IssuesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or issue not found' })
+  @ApiConflictResponse({ description: 'Issue is not in active sprint board' })
   @Patch(':issue_id/position')
   reorder(
     @Param('project_id', ParseUUIDPipe) projectId: string,

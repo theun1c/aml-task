@@ -29,6 +29,7 @@ describe('IssuesService', () => {
   };
   let issuesPositionService: {
     appendToScope: jest.Mock;
+    reorder: jest.Mock;
   };
 
   const currentUser: AuthenticatedUser = {
@@ -54,6 +55,7 @@ describe('IssuesService', () => {
     };
     issuesPositionService = {
       appendToScope: jest.fn(),
+      reorder: jest.fn(),
     };
 
     service = new IssuesService(
@@ -111,6 +113,83 @@ describe('IssuesService', () => {
 
     expect(issuesAccessService.validateStatus).not.toHaveBeenCalled();
     expect(issuesPositionService.appendToScope).not.toHaveBeenCalled();
+  });
+
+  it('changeStatus() should allow same status as no-op outside active sprint board', async () => {
+    const issue = createIssueEntity({
+      sprint_id: null,
+      status_id: 'status-1',
+    });
+
+    issuesAccessService.getProjectAccess.mockResolvedValue({
+      member: {
+        user_id: 'user-1',
+      },
+      project: {
+        id: 'project-1',
+        owner_id: 'owner-1',
+      },
+    });
+    issuesAccessService.getIssueOrThrow.mockResolvedValue(issue);
+
+    const response = await service.changeStatus('project-1', 'issue-1', currentUser, {
+      status_id: 'status-1',
+    });
+
+    expect(response.id).toBe(issue.id);
+    expect(prisma.sprints.findUnique).not.toHaveBeenCalled();
+    expect(issuesAccessService.validateStatus).not.toHaveBeenCalled();
+    expect(issuesPositionService.appendToScope).not.toHaveBeenCalled();
+  });
+
+  it('reorder() should reject issue from non-active sprint board when target index changes', async () => {
+    const issue = createIssueEntity({
+      sprint_id: 'sprint-1',
+      status_id: 'status-1',
+    });
+
+    issuesAccessService.getProjectAccess.mockResolvedValue({
+      member: {
+        user_id: 'user-1',
+      },
+      project: {
+        id: 'project-1',
+        owner_id: 'owner-1',
+      },
+    });
+    issuesAccessService.getIssueOrThrow.mockResolvedValue(issue);
+    issuesRepository.scopeForIssue = jest.fn().mockReturnValue({
+      projectId: 'project-1',
+      sprintId: 'sprint-1',
+      statusId: 'status-1',
+    });
+    issuesRepository.listInScope = jest.fn().mockResolvedValue([
+      issue,
+      createIssueEntity({
+        id: 'issue-2',
+        sprint_id: 'sprint-1',
+        status_id: 'status-1',
+      }),
+    ]);
+    prisma.sprints.findUnique.mockResolvedValue({
+      id: 'sprint-1',
+      project_id: 'project-1',
+      status: 'planned',
+    });
+
+    let caughtError: unknown;
+
+    try {
+      await service.reorder('project-1', 'issue-1', currentUser, {
+        target_index: 1,
+      });
+    } catch (error) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBeInstanceOf(ConflictException);
+    expect((caughtError as Error).message).toBe('Cannot reorder issue outside active sprint board');
+    expect(issuesPositionService.reorder).not.toHaveBeenCalled();
   });
 });
 

@@ -44,8 +44,12 @@ export class IssuesRepository {
   }
 
   async deleteTx(tx: Prisma.TransactionClient, issueId: string) {
-    return tx.issues.delete({
+    return tx.issues.update({
       where: { id: issueId },
+      data: {
+        deleted_at: new Date(),
+        updated_at: new Date(),
+      },
     });
   }
 
