@@ -10,8 +10,12 @@ describe('SprintsService', () => {
       create: jest.Mock;
       findFirst: jest.Mock;
       findMany: jest.Mock;
+      update: jest.Mock;
     };
     statuses: {
+      findFirst: jest.Mock;
+    };
+    issues: {
       findFirst: jest.Mock;
     };
     $transaction: jest.Mock;
@@ -26,8 +30,12 @@ describe('SprintsService', () => {
         create: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
+        update: jest.fn(),
       },
       statuses: {
+        findFirst: jest.fn(),
+      },
+      issues: {
         findFirst: jest.fn(),
       },
       $transaction: jest.fn(),
@@ -56,6 +64,52 @@ describe('SprintsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('start() should reject empty sprint without issues', async () => {
+    projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    prisma.sprints.findFirst
+      .mockResolvedValueOnce({
+        id: 'sprint-1',
+        project_id: 'project-1',
+        name: 'Sprint 1',
+        goal: null,
+        status: 'planned',
+        start_date: null,
+        end_date: null,
+        completed_at: null,
+        created_at: new Date('2026-05-01T10:00:00.000Z'),
+        updated_at: new Date('2026-05-01T11:00:00.000Z'),
+      })
+      .mockResolvedValueOnce(null);
+    prisma.issues.findFirst.mockResolvedValue(null);
+    prisma.sprints.update.mockResolvedValue({
+      id: 'sprint-1',
+      project_id: 'project-1',
+      name: 'Sprint 1',
+      goal: null,
+      status: 'active',
+      start_date: new Date('2026-05-11T10:00:00.000Z'),
+      end_date: null,
+      completed_at: null,
+      created_at: new Date('2026-05-01T10:00:00.000Z'),
+      updated_at: new Date('2026-05-11T10:00:00.000Z'),
+    });
+
+    await expect(service.start('project-1', 'sprint-1', 'user-1')).rejects.toThrow(
+      'Sprint must contain at least one issue before start',
+    );
+    expect(prisma.issues.findFirst).toHaveBeenCalledWith({
+      where: {
+        project_id: 'project-1',
+        sprint_id: 'sprint-1',
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+    expect(prisma.sprints.update).not.toHaveBeenCalled();
   });
 
   it('complete() should move unfinished sprint issues to backlog with appended rank positions', async () => {

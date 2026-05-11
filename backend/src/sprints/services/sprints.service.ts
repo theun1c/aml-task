@@ -89,6 +89,21 @@ export class SprintsService {
       throw new ConflictException('Project already has active sprint');
     }
 
+    const sprintIssue = await this.prisma.issues.findFirst({
+      where: {
+        project_id: projectId,
+        sprint_id: sprintId,
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!sprintIssue) {
+      throw new ConflictException('Sprint must contain at least one issue before start');
+    }
+
     const updatedSprint = await this.prisma.sprints.update({
       where: {
         id: sprintId,
