@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { ProjectsService } from '../../projects/services/projects.service';
 import { CreateSprintDto } from '../dto/create-sprint.dto';
+import { UpdateSprintDto } from '../dto/update-sprint.dto';
 import { SprintResponse } from '../responses/sprint.response';
 
 @Injectable()
@@ -18,6 +19,10 @@ export class SprintsService {
 
   async create(projectId: string, userId: string, dto: CreateSprintDto): Promise<SprintResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    this.ensureDateRange(
+      dto.start_date ? new Date(dto.start_date) : null,
+      dto.end_date ? new Date(dto.end_date) : null,
+    );
 
     try {
       const sprint = await this.prisma.sprints.create({
@@ -54,6 +59,14 @@ export class SprintsService {
     });
 
     return sprints.map((sprint) => this.toSprintResponse(sprint));
+  }
+
+  async findById(projectId: string, sprintId: string, userId: string): Promise<SprintResponse> {
+    await this.projectsService.ensureProjectMember(projectId, userId);
+
+    const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
+
+    return this.toSprintResponse(sprint);
   }
 
   async findActive(projectId: string, userId: string): Promise<SprintResponse | null> {
@@ -198,6 +211,127 @@ export class SprintsService {
     return this.toSprintResponse(completedSprint);
   }
 
+  async update(
+    projectId: string,
+    sprintId: string,
+    userId: string,
+    dto: UpdateSprintDto,
+  ): Promise<SprintResponse> {
+    await this.projectsService.ensureProjectMember(projectId, userId);
+
+    const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
+
+    if (sprint.status !== 'planned') {
+      throw new ConflictException('Only planned sprint can be updated');
+    }
+
+    const data: Record<string, unknown> = {};
+
+    if (dto.name !== undefined && dto.name !== sprint.name) {
+      data.name = dto.name;
+    }
+
+    if (dto.goal !== undefined && dto.goal !== sprint.goal) {
+      data.goal = dto.goal ?? null;
+    }
+
+    if (dto.start_date !== undefined) {
+      data.start_date = dto.start_date ? new Date(dto.start_date) : null;
+    }
+
+    if (dto.end_date !== undefined) {
+      data.end_date = dto.end_date ? new Date(dto.end_date) : null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return this.toSprintResponse(sprint);
+    }
+
+    this.ensureDateRange(
+      (data.start_date as Date | null | undefined) ?? sprint.start_date,
+      (data.end_date as Date | null | undefined) ?? sprint.end_date,
+    );
+
+    try {
+      const updatedSprint = await this.prisma.sprints.update({
+        where: {
+          id: sprintId,
+        },
+        data: {
+          ...data,
+          updated_at: new Date(),
+        },
+      });
+
+      return this.toSprintResponse(updatedSprint);
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('Sprint with this name already exists in project');
+      }
+
+      throw error;
+    }
+  }
+
+  async delete(projectId: string, sprintId: string, userId: string): Promise<void> {
+    await this.projectsService.ensureProjectMember(projectId, userId);
+
+    const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
+
+    if (sprint.status !== 'planned') {
+      throw new ConflictException('Only planned sprint can be deleted');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const backlogMaxRank = await tx.issues.aggregate({
+        where: {
+          project_id: projectId,
+          sprint_id: null,
+          deleted_at: null,
+        },
+        _max: {
+          rank_position: true,
+        },
+      });
+
+      const sprintIssues = await tx.issues.findMany({
+        where: {
+          project_id: projectId,
+          sprint_id: sprintId,
+          deleted_at: null,
+        },
+        select: {
+          id: true,
+        },
+        orderBy: [{ created_at: 'asc' }],
+      });
+
+      let nextRankPosition = this.getNextBacklogRankPosition(backlogMaxRank._max.rank_position);
+      const updatedAt = new Date();
+
+      for (const issue of sprintIssues) {
+        await tx.issues.update({
+          where: {
+            id: issue.id,
+          },
+          data: {
+            sprint_id: null,
+            rank_position: nextRankPosition,
+            updated_at: updatedAt,
+          },
+        });
+
+        nextRankPosition += 1;
+      }
+
+      await tx.sprints.delete({
+        where: {
+          id: sprintId,
+        },
+      });
+    });
+  }
+
   private async findSprintEntityOrThrow(projectId: string, sprintId: string) {
     const sprint = await this.prisma.sprints.findFirst({
       where: {
@@ -241,6 +375,16 @@ export class SprintsService {
 
   private isUniqueConstraintError(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+  }
+
+  private ensureDateRange(startDate: Date | null, endDate: Date | null): void {
+    if (!startDate || !endDate) {
+      return;
+    }
+
+    if (startDate > endDate) {
+      throw new BadRequestException('Sprint start date must be before or equal to end date');
+    }
   }
 
   private getNextBacklogRankPosition(rankPosition: { toString(): string } | number | null): number {

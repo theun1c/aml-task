@@ -8,6 +8,7 @@ describe('SprintsService', () => {
   let prisma: {
     sprints: {
       create: jest.Mock;
+      delete: jest.Mock;
       findFirst: jest.Mock;
       findMany: jest.Mock;
       update: jest.Mock;
@@ -28,6 +29,7 @@ describe('SprintsService', () => {
     prisma = {
       sprints: {
         create: jest.fn(),
+        delete: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
@@ -110,6 +112,19 @@ describe('SprintsService', () => {
       },
     });
     expect(prisma.sprints.update).not.toHaveBeenCalled();
+  });
+
+  it('create() should reject invalid sprint date range', async () => {
+    projectsService.ensureProjectMember.mockResolvedValue(undefined);
+
+    await expect(
+      service.create('project-1', 'user-1', {
+        name: 'Sprint 1',
+        start_date: '2026-05-20',
+        end_date: '2026-05-10',
+      }),
+    ).rejects.toThrow('Sprint start date must be before or equal to end date');
+    expect(prisma.sprints.create).not.toHaveBeenCalled();
   });
 
   it('complete() should move unfinished sprint issues to backlog with appended rank positions', async () => {
@@ -213,4 +228,152 @@ describe('SprintsService', () => {
       }),
     });
   });
+
+  it('findById() should return sprint details for project member', async () => {
+    projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    prisma.sprints.findFirst.mockResolvedValue(
+      createSprintEntity({
+        id: 'sprint-42',
+        project_id: 'project-1',
+        name: 'Sprint 42',
+      }),
+    );
+
+    const sprint = await (service as unknown as { findById: Function }).findById(
+      'project-1',
+      'sprint-42',
+      'user-1',
+    );
+
+    expect(projectsService.ensureProjectMember).toHaveBeenCalledWith('project-1', 'user-1');
+    expect(prisma.sprints.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'sprint-42',
+        project_id: 'project-1',
+      },
+    });
+    expect(sprint).toMatchObject({
+      id: 'sprint-42',
+      project_id: 'project-1',
+      name: 'Sprint 42',
+    });
+  });
+
+  it('update() should reject non-planned sprint', async () => {
+    projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    prisma.sprints.findFirst.mockResolvedValue(
+      createSprintEntity({
+        id: 'sprint-1',
+        project_id: 'project-1',
+        status: 'active',
+      }),
+    );
+
+    await expect(
+      (service as unknown as { update: Function }).update('project-1', 'sprint-1', 'user-1', {
+        name: 'Updated sprint',
+      }),
+    ).rejects.toThrow('Only planned sprint can be updated');
+    expect(prisma.sprints.update).not.toHaveBeenCalled();
+  });
+
+  it('delete() should move sprint issues to backlog before removing planned sprint', async () => {
+    projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    prisma.sprints.findFirst.mockResolvedValue(
+      createSprintEntity({
+        id: 'sprint-1',
+        project_id: 'project-1',
+        status: 'planned',
+      }),
+    );
+
+    const tx = {
+      issues: {
+        aggregate: jest.fn().mockResolvedValue({
+          _max: {
+            rank_position: 2,
+          },
+        }),
+        findMany: jest.fn().mockResolvedValue([{ id: 'issue-10' }, { id: 'issue-11' }]),
+        update: jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'issue-10' })
+          .mockResolvedValueOnce({ id: 'issue-11' }),
+      },
+      sprints: {
+        delete: jest.fn().mockResolvedValue({
+          id: 'sprint-1',
+        }),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(async (callback: (value: typeof tx) => unknown) => {
+      return callback(tx);
+    });
+
+    await (service as unknown as { delete: Function }).delete('project-1', 'sprint-1', 'user-1');
+
+    expect(tx.issues.aggregate).toHaveBeenCalledWith({
+      where: {
+        project_id: 'project-1',
+        sprint_id: null,
+        deleted_at: null,
+      },
+      _max: {
+        rank_position: true,
+      },
+    });
+    expect(tx.issues.findMany).toHaveBeenCalledWith({
+      where: {
+        project_id: 'project-1',
+        sprint_id: 'sprint-1',
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+      },
+      orderBy: [{ created_at: 'asc' }],
+    });
+    expect(tx.issues.update).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: 'issue-10',
+      },
+      data: expect.objectContaining({
+        sprint_id: null,
+        rank_position: 3,
+        updated_at: expect.any(Date),
+      }),
+    });
+    expect(tx.issues.update).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: 'issue-11',
+      },
+      data: expect.objectContaining({
+        sprint_id: null,
+        rank_position: 4,
+        updated_at: expect.any(Date),
+      }),
+    });
+    expect(tx.sprints.delete).toHaveBeenCalledWith({
+      where: {
+        id: 'sprint-1',
+      },
+    });
+  });
 });
+
+function createSprintEntity(overrides?: Partial<Record<string, unknown>>) {
+  return {
+    id: 'sprint-1',
+    project_id: 'project-1',
+    name: 'Sprint 1',
+    goal: null,
+    status: 'planned',
+    start_date: null,
+    end_date: null,
+    completed_at: null,
+    created_at: new Date('2026-05-01T10:00:00.000Z'),
+    updated_at: new Date('2026-05-01T11:00:00.000Z'),
+    ...overrides,
+  };
+}
