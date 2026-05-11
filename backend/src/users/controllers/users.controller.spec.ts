@@ -8,6 +8,7 @@ describe('UsersController', () => {
   beforeEach(() => {
     usersService = {
       getProfile: jest.fn(),
+      searchByEmail: jest.fn(),
       updateProfile: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
@@ -65,5 +66,29 @@ describe('UsersController', () => {
       email: 'new@example.com',
       full_name: 'New Name',
     });
+  });
+
+  it('search() should delegate to users service with email query', async () => {
+    usersService.searchByEmail.mockResolvedValue([
+      {
+        id: 'user-1',
+        email: 'user@example.com',
+        full_name: 'User Name',
+      },
+    ]);
+
+    await expect(
+      controller.search({
+        email: 'exa',
+      }),
+    ).resolves.toEqual([
+      {
+        id: 'user-1',
+        email: 'user@example.com',
+        full_name: 'User Name',
+      },
+    ]);
+
+    expect(usersService.searchByEmail).toHaveBeenCalledWith('exa');
   });
 });

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -12,6 +12,7 @@ import {
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { SearchUsersDto } from '../dto/search-users.dto';
 import { UpdateProfileDto } from '../dto/update-profile.dto';
 import { UserProfileResponse } from '../responses/user-profile.response';
 import { UsersService } from '../services/users.service';
@@ -30,6 +31,15 @@ export class UsersController {
   @ApiNotFoundResponse({ description: 'User not found' })
   me(@CurrentUser() user: AuthenticatedUser): Promise<UserProfileResponse> {
     return this.usersService.getProfile(user.id);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search active users by email fragment' })
+  @ApiOkResponse({ type: UserProfileResponse, isArray: true })
+  @ApiBadRequestResponse({ description: 'Validation error' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  search(@Query() query: SearchUsersDto): Promise<UserProfileResponse[]> {
+    return this.usersService.searchByEmail(query.email);
   }
 
   @Patch('me')

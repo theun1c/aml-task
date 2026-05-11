@@ -13,6 +13,30 @@ export class UsersService {
     return this.toUserProfileResponse(user);
   }
 
+  async searchByEmail(emailQuery: string): Promise<UserProfileResponse[]> {
+    const normalizedEmailQuery = this.normalizeEmail(emailQuery);
+    const users = await this.prisma.users.findMany({
+      where: {
+        email: {
+          contains: normalizedEmailQuery,
+        },
+        deleted_at: null,
+        is_active: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        full_name: true,
+      },
+      orderBy: {
+        email: 'asc',
+      },
+      take: 10,
+    });
+
+    return users.map((user) => this.toUserProfileResponse(user));
+  }
+
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<UserProfileResponse> {
     const existingUser = await this.findActiveUserOrThrow(userId);
     const normalizedEmail = dto.email !== undefined ? this.normalizeEmail(dto.email) : undefined;

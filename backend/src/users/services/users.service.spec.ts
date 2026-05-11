@@ -11,6 +11,7 @@ type PrismaMock = {
   users: {
     findFirst: jest.Mock;
     findUnique: jest.Mock;
+    findMany: jest.Mock;
     update: jest.Mock;
   };
 };
@@ -24,6 +25,7 @@ describe('UsersService', () => {
       users: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         update: jest.fn(),
       },
     };
@@ -128,5 +130,52 @@ describe('UsersService', () => {
     prisma.users.findFirst.mockResolvedValue(null);
 
     await expect(service.getProfile('missing-user')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('searchByEmail() should normalize email query and return public profiles only', async () => {
+    prisma.users.findMany.mockResolvedValue([
+      {
+        id: 'user-1',
+        email: 'alex@example.com',
+        full_name: 'Alex One',
+      },
+      {
+        id: 'user-2',
+        email: 'max@example.com',
+        full_name: 'Max Two',
+      },
+    ]);
+
+    await expect(service.searchByEmail('  EXA  ')).resolves.toEqual([
+      {
+        id: 'user-1',
+        email: 'alex@example.com',
+        full_name: 'Alex One',
+      },
+      {
+        id: 'user-2',
+        email: 'max@example.com',
+        full_name: 'Max Two',
+      },
+    ]);
+
+    expect(prisma.users.findMany).toHaveBeenCalledWith({
+      where: {
+        email: {
+          contains: 'exa',
+        },
+        deleted_at: null,
+        is_active: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        full_name: true,
+      },
+      orderBy: {
+        email: 'asc',
+      },
+      take: 10,
+    });
   });
 });
