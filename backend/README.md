@@ -17,7 +17,12 @@ Backend для AML Task Manager на `NestJS + Prisma + PostgreSQL`.
 - `auth`
 - `issues`
 
-Для остальных модулей код уже существует, но документация еще синхронизируется с фактическим поведением.
+Дополнительно синхронизированы feature-docs для:
+- `users`
+- `projects`
+- `statuses`
+- `sprints`
+- `comments`
 
 ## Основной dev-flow
 
@@ -40,6 +45,10 @@ make start-dev
 - выполняет `prisma db pull`;
 - выполняет `prisma generate`;
 - запускает backend локально.
+
+Важно:
+- Prisma client хранится в репозитории в `generated/prisma`, потому что код импортирует его напрямую;
+- если меняется `schema.prisma`, нужно выполнить `npm run prisma:generate` и закоммитить обновленный `generated/prisma`.
 
 ## Локальная инфраструктура
 
@@ -104,6 +113,16 @@ Backend строится как модульный монолит.
 - [docs/ai/features/001-auth/TASKS.md](docs/ai/features/001-auth/TASKS.md)
 - [docs/ai/features/002-issues/SPEC.md](docs/ai/features/002-issues/SPEC.md)
 - [docs/ai/features/002-issues/TASKS.md](docs/ai/features/002-issues/TASKS.md)
+- [docs/ai/features/003-users/SPEC.md](docs/ai/features/003-users/SPEC.md)
+- [docs/ai/features/003-users/TASKS.md](docs/ai/features/003-users/TASKS.md)
+- [docs/ai/features/004-projects/SPEC.md](docs/ai/features/004-projects/SPEC.md)
+- [docs/ai/features/004-projects/TASKS.md](docs/ai/features/004-projects/TASKS.md)
+- [docs/ai/features/005-statuses/SPEC.md](docs/ai/features/005-statuses/SPEC.md)
+- [docs/ai/features/005-statuses/TASKS.md](docs/ai/features/005-statuses/TASKS.md)
+- [docs/ai/features/006-sprints/SPEC.md](docs/ai/features/006-sprints/SPEC.md)
+- [docs/ai/features/006-sprints/TASKS.md](docs/ai/features/006-sprints/TASKS.md)
+- [docs/ai/features/007-comments/SPEC.md](docs/ai/features/007-comments/SPEC.md)
+- [docs/ai/features/007-comments/TASKS.md](docs/ai/features/007-comments/TASKS.md)
 
 Для ревью используется:
 - [docs/ai/REVIEW_CHECKLIST.md](docs/ai/REVIEW_CHECKLIST.md)
