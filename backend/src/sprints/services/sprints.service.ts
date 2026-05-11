@@ -124,7 +124,18 @@ export class SprintsService {
     }
 
     const completedSprint = await this.prisma.$transaction(async (tx) => {
-      await tx.issues.updateMany({
+      const backlogMaxRank = await tx.issues.aggregate({
+        where: {
+          project_id: projectId,
+          sprint_id: null,
+          deleted_at: null,
+        },
+        _max: {
+          rank_position: true,
+        },
+      });
+
+      const unfinishedIssues = await tx.issues.findMany({
         where: {
           project_id: projectId,
           sprint_id: sprintId,
@@ -133,11 +144,29 @@ export class SprintsService {
           },
           deleted_at: null,
         },
-        data: {
-          sprint_id: null,
-          updated_at: new Date(),
+        select: {
+          id: true,
         },
+        orderBy: [{ created_at: 'asc' }],
       });
+
+      let nextRankPosition = this.getNextBacklogRankPosition(backlogMaxRank._max.rank_position);
+      const updatedAt = new Date();
+
+      for (const issue of unfinishedIssues) {
+        await tx.issues.update({
+          where: {
+            id: issue.id,
+          },
+          data: {
+            sprint_id: null,
+            rank_position: nextRankPosition,
+            updated_at: updatedAt,
+          },
+        });
+
+        nextRankPosition += 1;
+      }
 
       return tx.sprints.update({
         where: {
@@ -197,5 +226,17 @@ export class SprintsService {
 
   private isUniqueConstraintError(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+  }
+
+  private getNextBacklogRankPosition(rankPosition: { toString(): string } | number | null): number {
+    if (rankPosition === null) {
+      return 0;
+    }
+
+    if (typeof rankPosition === 'number') {
+      return rankPosition + 1;
+    }
+
+    return Number(rankPosition.toString()) + 1;
   }
 }
