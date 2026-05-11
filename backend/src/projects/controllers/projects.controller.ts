@@ -74,7 +74,9 @@ export class ProjectsController {
     description: 'Only project owner can perform this action',
   })
   @ApiNotFoundResponse({ description: 'Project not found' })
-  @ApiConflictResponse({ description: 'Project with this name already exists' })
+  @ApiConflictResponse({
+    description: 'Project with this name already exists or archived project is read-only',
+  })
   async update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('project_id') projectId: string,

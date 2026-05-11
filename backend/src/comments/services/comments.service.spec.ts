@@ -19,6 +19,7 @@ describe('CommentsService', () => {
   };
   let projectsService: {
     ensureProjectMember: jest.Mock;
+    ensureProjectWritable: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -36,6 +37,7 @@ describe('CommentsService', () => {
 
     projectsService = {
       ensureProjectMember: jest.fn(),
+      ensureProjectWritable: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -57,6 +59,7 @@ describe('CommentsService', () => {
 
   it('create() should trim comment content before persisting', async () => {
     projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    projectsService.ensureProjectWritable.mockResolvedValue(undefined);
     prisma.issues.findFirst.mockResolvedValue({
       id: 'issue-1',
       project_id: 'project-1',
@@ -99,6 +102,7 @@ describe('CommentsService', () => {
 
   it('update() should trim comment content before saving', async () => {
     projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    projectsService.ensureProjectWritable.mockResolvedValue(undefined);
     prisma.issues.findFirst.mockResolvedValue({
       id: 'issue-1',
       project_id: 'project-1',
@@ -152,6 +156,7 @@ describe('CommentsService', () => {
 
   it('delete() should reject non-author user', async () => {
     projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    projectsService.ensureProjectWritable.mockResolvedValue(undefined);
     prisma.issues.findFirst.mockResolvedValue({
       id: 'issue-1',
       project_id: 'project-1',

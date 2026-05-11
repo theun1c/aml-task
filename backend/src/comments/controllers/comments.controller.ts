@@ -1,5 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiConflictResponse,
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -36,10 +47,11 @@ export class CommentsController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or issue not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   async create(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id') projectId: string,
-    @Param('issue_id') issueId: string,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
+    @Param('issue_id', ParseUUIDPipe) issueId: string,
     @Body() dto: CreateCommentDto,
   ): Promise<CommentResponse> {
     return this.commentsService.create(projectId, issueId, this.getUserId(user), dto);
@@ -53,8 +65,8 @@ export class CommentsController {
   @ApiNotFoundResponse({ description: 'Project or issue not found' })
   async findAll(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id') projectId: string,
-    @Param('issue_id') issueId: string,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
+    @Param('issue_id', ParseUUIDPipe) issueId: string,
   ): Promise<CommentResponse[]> {
     return this.commentsService.findAll(projectId, issueId, this.getUserId(user));
   }
@@ -67,11 +79,12 @@ export class CommentsController {
     description: 'User is not a project member or is not comment author',
   })
   @ApiNotFoundResponse({ description: 'Project, issue or comment not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   async update(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id') projectId: string,
-    @Param('issue_id') issueId: string,
-    @Param('comment_id') commentId: string,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
+    @Param('issue_id', ParseUUIDPipe) issueId: string,
+    @Param('comment_id', ParseUUIDPipe) commentId: string,
     @Body() dto: UpdateCommentDto,
   ): Promise<CommentResponse> {
     return this.commentsService.update(projectId, issueId, commentId, this.getUserId(user), dto);
@@ -85,11 +98,12 @@ export class CommentsController {
     description: 'User is not a project member or is not comment author',
   })
   @ApiNotFoundResponse({ description: 'Project, issue or comment not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   async delete(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id') projectId: string,
-    @Param('issue_id') issueId: string,
-    @Param('comment_id') commentId: string,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
+    @Param('issue_id', ParseUUIDPipe) issueId: string,
+    @Param('comment_id', ParseUUIDPipe) commentId: string,
   ): Promise<CommentResponse> {
     return this.commentsService.delete(projectId, issueId, commentId, this.getUserId(user));
   }

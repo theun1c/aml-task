@@ -19,6 +19,7 @@ export class CommentsService {
     dto: CreateCommentDto,
   ): Promise<CommentResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
     await this.ensureIssueBelongsToProject(projectId, issueId);
     const normalizedContent = this.normalizeContent(dto.content);
 
@@ -74,6 +75,7 @@ export class CommentsService {
     dto: UpdateCommentDto,
   ): Promise<CommentResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
     await this.ensureIssueBelongsToProject(projectId, issueId);
 
     const comment = await this.findCommentEntityOrThrow(issueId, commentId);
@@ -111,6 +113,7 @@ export class CommentsService {
     userId: string,
   ): Promise<CommentResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
     await this.ensureIssueBelongsToProject(projectId, issueId);
 
     const comment = await this.findCommentEntityOrThrow(issueId, commentId);

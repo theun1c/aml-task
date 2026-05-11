@@ -51,7 +51,9 @@ export class ProjectMembersController {
     description: 'Only project owner can perform this action',
   })
   @ApiNotFoundResponse({ description: 'Project or user not found' })
-  @ApiConflictResponse({ description: 'User is already a project member' })
+  @ApiConflictResponse({
+    description: 'User is already a project member or archived project is read-only',
+  })
   async addMember(
     @CurrentUser() user: AuthenticatedUser,
     @Param('project_id') projectId: string,
@@ -68,6 +70,7 @@ export class ProjectMembersController {
     description: 'Only project owner can perform this action',
   })
   @ApiNotFoundResponse({ description: 'Project member not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   async removeMember(
     @CurrentUser() user: AuthenticatedUser,
     @Param('project_id') projectId: string,

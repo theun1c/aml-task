@@ -48,6 +48,7 @@ describe('StatusesService', () => {
   let projectsService: {
     ensureProjectOwner: jest.Mock;
     ensureProjectMember: jest.Mock;
+    ensureProjectWritable: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -84,6 +85,7 @@ describe('StatusesService', () => {
     projectsService = {
       ensureProjectOwner: jest.fn(),
       ensureProjectMember: jest.fn(),
+      ensureProjectWritable: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -122,6 +124,10 @@ describe('StatusesService', () => {
     ]);
 
     projectsService.ensureProjectOwner.mockResolvedValue({
+      id: 'project-1',
+      owner_id: 'owner-1',
+    });
+    projectsService.ensureProjectWritable.mockResolvedValue({
       id: 'project-1',
       owner_id: 'owner-1',
     });
@@ -178,6 +184,10 @@ describe('StatusesService', () => {
     ]);
 
     projectsService.ensureProjectOwner.mockResolvedValue({
+      id: 'project-1',
+      owner_id: 'owner-1',
+    });
+    projectsService.ensureProjectWritable.mockResolvedValue({
       id: 'project-1',
       owner_id: 'owner-1',
     });

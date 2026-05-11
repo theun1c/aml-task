@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -39,7 +49,7 @@ export class StatusesController {
   @ApiNotFoundResponse({ description: 'Project not found' })
   async findAll(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id') projectId: string,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
   ): Promise<StatusResponse[]> {
     return this.statusesService.findAll(projectId, this.getUserId(user));
   }
@@ -53,11 +63,12 @@ export class StatusesController {
   })
   @ApiNotFoundResponse({ description: 'Project not found' })
   @ApiConflictResponse({
-    description: 'Status with this name or position already exists in project',
+    description:
+      'Status with this name or position already exists in project or archived project is read-only',
   })
   async create(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id') projectId: string,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
     @Body() dto: CreateStatusDto,
   ): Promise<StatusResponse> {
     return this.statusesService.create(projectId, this.getUserId(user), dto);
@@ -72,12 +83,13 @@ export class StatusesController {
   })
   @ApiNotFoundResponse({ description: 'Project or status not found' })
   @ApiConflictResponse({
-    description: 'Status with this name or position already exists in project',
+    description:
+      'Status with this name or position already exists in project or archived project is read-only',
   })
   async update(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id') projectId: string,
-    @Param('status_id') statusId: string,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
+    @Param('status_id', ParseUUIDPipe) statusId: string,
     @Body() dto: UpdateStatusDto,
   ): Promise<StatusResponse> {
     return this.statusesService.update(projectId, statusId, this.getUserId(user), dto);
@@ -93,12 +105,12 @@ export class StatusesController {
   @ApiNotFoundResponse({ description: 'Project or status not found' })
   @ApiConflictResponse({
     description:
-      'Project must have at least one status or status is referenced by related records',
+      'Archived project is read-only, project must have at least one status or status is referenced by related records',
   })
   async remove(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id') projectId: string,
-    @Param('status_id') statusId: string,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
+    @Param('status_id', ParseUUIDPipe) statusId: string,
   ): Promise<StatusResponse> {
     return this.statusesService.remove(projectId, statusId, this.getUserId(user));
   }

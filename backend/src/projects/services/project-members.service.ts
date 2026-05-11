@@ -50,6 +50,7 @@ export class ProjectMembersService {
     dto: AddProjectMemberDto,
   ): Promise<ProjectMemberResponse> {
     await this.projectsService.ensureProjectOwner(projectId, currentUserId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     const normalizedEmail = this.normalizeEmail(dto.email);
 
@@ -127,6 +128,7 @@ export class ProjectMembersService {
     targetUserId: string,
   ): Promise<ProjectMemberResponse> {
     const project = await this.projectsService.ensureProjectOwner(projectId, currentUserId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     if (project.owner_id === targetUserId) {
       throw new ForbiddenException('Project owner cannot be removed');

@@ -106,10 +106,14 @@ export class ProjectsService {
   }
 
   async update(projectId: string, userId: string, dto: UpdateProjectDto): Promise<ProjectResponse> {
-    await this.ensureProjectOwner(projectId, userId);
+    const project = await this.ensureProjectOwner(projectId, userId);
+
+    if (project.is_archived && dto.is_archived !== false) {
+      throw new ConflictException('Archived project is read-only');
+    }
 
     try {
-      const project = await this.prisma.projects.update({
+      const updatedProject = await this.prisma.projects.update({
         where: {
           id: projectId,
         },
@@ -121,7 +125,7 @@ export class ProjectsService {
         },
       });
 
-      return this.toProjectResponse(project);
+      return this.toProjectResponse(updatedProject);
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
         throw new ConflictException('Project with this name already exists');
@@ -132,9 +136,13 @@ export class ProjectsService {
   }
 
   async archive(projectId: string, userId: string): Promise<ProjectResponse> {
-    await this.ensureProjectOwner(projectId, userId);
+    const project = await this.ensureProjectOwner(projectId, userId);
 
-    const project = await this.prisma.projects.update({
+    if (project.is_archived) {
+      return this.toProjectResponse(project);
+    }
+
+    const archivedProject = await this.prisma.projects.update({
       where: {
         id: projectId,
       },
@@ -144,7 +152,7 @@ export class ProjectsService {
       },
     });
 
-    return this.toProjectResponse(project);
+    return this.toProjectResponse(archivedProject);
   }
 
   async ensureProjectMember(projectId: string, userId: string) {
@@ -170,6 +178,16 @@ export class ProjectsService {
 
     if (project.owner_id !== userId) {
       throw new ForbiddenException('Only project owner can perform this action');
+    }
+
+    return project;
+  }
+
+  async ensureProjectWritable(projectId: string) {
+    const project = await this.findProjectEntityOrThrow(projectId);
+
+    if (project.is_archived) {
+      throw new ConflictException('Archived project is read-only');
     }
 
     return project;

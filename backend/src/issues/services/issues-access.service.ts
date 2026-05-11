@@ -11,6 +11,10 @@ import type { IssueTypeValue } from '../issue-type';
 import { ProjectAccess } from '../issue.types';
 import { IssuesRepository } from '../repositories/issues.repository';
 
+type ProjectAccessOptions = {
+  requireWritable?: boolean;
+};
+
 @Injectable()
 export class IssuesAccessService {
   constructor(
@@ -18,7 +22,11 @@ export class IssuesAccessService {
     private readonly issuesRepository: IssuesRepository,
   ) {}
 
-  async getProjectAccess(projectId: string, userId: string): Promise<ProjectAccess> {
+  async getProjectAccess(
+    projectId: string,
+    userId: string,
+    options?: ProjectAccessOptions,
+  ): Promise<ProjectAccess> {
     const project = await this.prisma.projects.findUnique({
       where: {
         id: projectId,
@@ -27,6 +35,10 @@ export class IssuesAccessService {
 
     if (!project || project.deleted_at !== null) {
       throw new NotFoundException('Project not found');
+    }
+
+    if (options?.requireWritable && project.is_archived) {
+      throw new ConflictException('Archived project is read-only');
     }
 
     const member = await this.prisma.project_members.findFirst({

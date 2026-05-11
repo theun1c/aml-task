@@ -27,7 +27,9 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: CreateIssueDto,
   ): Promise<IssueResponse> {
-    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const defaultStatus = await this.issuesAccessService.getDefaultStatus(projectId);
     const issueType = await this.issuesAccessService.getIssueTypeOrThrow(dto.type_code);
     await this.issuesAccessService.validateAssignee(projectId, dto.assignee_id ?? null);
@@ -63,7 +65,9 @@ export class IssuesService {
     issueId: string,
     user: AuthenticatedUser,
   ): Promise<IssueResponse> {
-    await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
 
     return this.toIssueResponse(issue);
@@ -114,7 +118,9 @@ export class IssuesService {
   }
 
   async delete(projectId: string, issueId: string, user: AuthenticatedUser): Promise<void> {
-    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
 
     if (issue.reporter_id !== user.id && access.project.owner_id !== user.id) {
@@ -141,7 +147,9 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: MoveIssueToSprintDto,
   ): Promise<IssueResponse> {
-    await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
 
     if (issue.sprint_id === dto.sprint_id) {
@@ -177,13 +185,16 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: ChangeIssueStatusDto,
   ): Promise<IssueResponse> {
-    await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
-    await this.ensureIssueInActiveSprintBoard(projectId, issue.sprint_id);
 
     if (issue.status_id === dto.status_id) {
       return this.toIssueResponse(issue);
     }
+
+    await this.ensureIssueInActiveSprintBoard(projectId, issue.sprint_id);
 
     await this.issuesAccessService.validateStatus(projectId, dto.status_id);
 
@@ -206,8 +217,11 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: ReorderIssueDto,
   ): Promise<IssueResponse> {
-    await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
+    await this.ensureIssueCanBeReordered(projectId, issue, dto.target_index);
 
     const reorderedIssue = await this.prisma.$transaction(async (tx) => {
       return this.issuesPositionService.reorder(tx, issue, dto.target_index);
@@ -220,12 +234,38 @@ export class IssuesService {
     return mapIssueToResponse(issue);
   }
 
+  private async ensureIssueCanBeReordered(
+    projectId: string,
+    issue: IssueEntity,
+    targetIndex: number,
+  ): Promise<void> {
+    if (issue.sprint_id === null) {
+      return;
+    }
+
+    const scope = this.issuesRepository.scopeForIssue(issue);
+    const issuesList = await this.issuesRepository.listInScope(this.prisma, scope);
+    const currentIndex = issuesList.findIndex((currentIssue) => currentIssue.id === issue.id);
+    const normalizedTargetIndex = Math.min(targetIndex, Math.max(issuesList.length - 1, 0));
+
+    if (currentIndex === normalizedTargetIndex) {
+      return;
+    }
+
+    await this.ensureIssueInActiveSprintBoard(
+      projectId,
+      issue.sprint_id,
+      'Cannot reorder issue outside active sprint board',
+    );
+  }
+
   private async ensureIssueInActiveSprintBoard(
     projectId: string,
     sprintId: string | null,
+    errorMessage = 'Cannot change issue status outside active sprint board',
   ): Promise<void> {
     if (sprintId === null) {
-      throw new ConflictException('Cannot change issue status outside active sprint board');
+      throw new ConflictException(errorMessage);
     }
 
     const sprint = await this.prisma.sprints.findUnique({
@@ -239,7 +279,7 @@ export class IssuesService {
     });
 
     if (!sprint || sprint.project_id !== projectId || sprint.status !== 'active') {
-      throw new ConflictException('Cannot change issue status outside active sprint board');
+      throw new ConflictException(errorMessage);
     }
   }
 }
