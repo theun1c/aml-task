@@ -16,6 +16,10 @@ export class ProjectMembersService {
     private readonly projectsService: ProjectsService,
   ) {}
 
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
   async findAll(projectId: string, currentUserId: string): Promise<ProjectMemberResponse[]> {
     await this.projectsService.ensureProjectMember(projectId, currentUserId);
 
@@ -47,9 +51,11 @@ export class ProjectMembersService {
   ): Promise<ProjectMemberResponse> {
     await this.projectsService.ensureProjectOwner(projectId, currentUserId);
 
+    const normalizedEmail = this.normalizeEmail(dto.email);
+
     const user = await this.prisma.users.findFirst({
       where: {
-        id: dto.user_id,
+        email: normalizedEmail,
         deleted_at: null,
         is_active: true,
       },
@@ -63,7 +69,7 @@ export class ProjectMembersService {
       where: {
         project_id_user_id: {
           project_id: projectId,
-          user_id: dto.user_id,
+          user_id: user.id,
         },
       },
     });
@@ -99,7 +105,7 @@ export class ProjectMembersService {
     const member = await this.prisma.project_members.create({
       data: {
         project_id: projectId,
-        user_id: dto.user_id,
+        user_id: user.id,
         role: 'member',
       },
       include: {
