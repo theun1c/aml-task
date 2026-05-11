@@ -34,6 +34,7 @@ export class StatusesService {
 
   async create(projectId: string, userId: string, dto: CreateStatusDto): Promise<StatusResponse> {
     await this.projectsService.ensureProjectOwner(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     try {
       const status = await this.prisma.$transaction(async (tx) => {
@@ -76,6 +77,7 @@ export class StatusesService {
     dto: UpdateStatusDto,
   ): Promise<StatusResponse> {
     await this.projectsService.ensureProjectOwner(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     const existingStatus = await this.findStatusEntityOrThrow(projectId, statusId);
 
@@ -170,6 +172,7 @@ export class StatusesService {
 
   async remove(projectId: string, statusId: string, userId: string): Promise<StatusResponse> {
     await this.projectsService.ensureProjectOwner(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     await this.findStatusEntityOrThrow(projectId, statusId);
 

@@ -53,7 +53,8 @@ export class StatusesController {
   })
   @ApiNotFoundResponse({ description: 'Project not found' })
   @ApiConflictResponse({
-    description: 'Status with this name or position already exists in project',
+    description:
+      'Status with this name or position already exists in project or archived project is read-only',
   })
   async create(
     @CurrentUser() user: AuthenticatedUser,
@@ -72,7 +73,8 @@ export class StatusesController {
   })
   @ApiNotFoundResponse({ description: 'Project or status not found' })
   @ApiConflictResponse({
-    description: 'Status with this name or position already exists in project',
+    description:
+      'Status with this name or position already exists in project or archived project is read-only',
   })
   async update(
     @CurrentUser() user: AuthenticatedUser,
@@ -93,7 +95,7 @@ export class StatusesController {
   @ApiNotFoundResponse({ description: 'Project or status not found' })
   @ApiConflictResponse({
     description:
-      'Project must have at least one status or status is referenced by related records',
+      'Archived project is read-only, project must have at least one status or status is referenced by related records',
   })
   async remove(
     @CurrentUser() user: AuthenticatedUser,

@@ -27,7 +27,9 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: CreateIssueDto,
   ): Promise<IssueResponse> {
-    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const defaultStatus = await this.issuesAccessService.getDefaultStatus(projectId);
     const issueType = await this.issuesAccessService.getIssueTypeOrThrow(dto.type_code);
     await this.issuesAccessService.validateAssignee(projectId, dto.assignee_id ?? null);
@@ -63,7 +65,9 @@ export class IssuesService {
     issueId: string,
     user: AuthenticatedUser,
   ): Promise<IssueResponse> {
-    await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
 
     return this.toIssueResponse(issue);
@@ -114,7 +118,9 @@ export class IssuesService {
   }
 
   async delete(projectId: string, issueId: string, user: AuthenticatedUser): Promise<void> {
-    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
 
     if (issue.reporter_id !== user.id && access.project.owner_id !== user.id) {
@@ -141,7 +147,9 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: MoveIssueToSprintDto,
   ): Promise<IssueResponse> {
-    await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
 
     if (issue.sprint_id === dto.sprint_id) {
@@ -177,7 +185,9 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: ChangeIssueStatusDto,
   ): Promise<IssueResponse> {
-    await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
 
     if (issue.status_id === dto.status_id) {
@@ -207,7 +217,9 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: ReorderIssueDto,
   ): Promise<IssueResponse> {
-    await this.issuesAccessService.getProjectAccess(projectId, user.id);
+    await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+      requireWritable: true,
+    });
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
     await this.ensureIssueCanBeReordered(projectId, issue, dto.target_index);
 

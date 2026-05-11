@@ -49,7 +49,9 @@ export class IssuesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or assignee not found' })
-  @ApiConflictResponse({ description: 'Project default status is not configured' })
+  @ApiConflictResponse({
+    description: 'Archived project is read-only or project default status is not configured',
+  })
   @Post()
   create(
     @Param('project_id', ParseUUIDPipe) projectId: string,
@@ -97,6 +99,7 @@ export class IssuesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project, issue or assignee not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   @Patch(':issue_id')
   update(
     @Param('project_id', ParseUUIDPipe) projectId: string,
@@ -114,6 +117,7 @@ export class IssuesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not allowed to delete this issue' })
   @ApiNotFoundResponse({ description: 'Project or issue not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   @HttpCode(200)
   @Delete(':issue_id')
   async delete(
@@ -133,7 +137,7 @@ export class IssuesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project, issue or sprint not found' })
-  @ApiConflictResponse({ description: 'Sprint cannot accept new issues' })
+  @ApiConflictResponse({ description: 'Archived project is read-only or sprint cannot accept new issues' })
   @HttpCode(200)
   @Post(':issue_id/sprint')
   moveToSprint(
@@ -153,7 +157,9 @@ export class IssuesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project, issue or status not found' })
-  @ApiConflictResponse({ description: 'Issue is not in active sprint board' })
+  @ApiConflictResponse({
+    description: 'Archived project is read-only or issue is not in active sprint board',
+  })
   @Patch(':issue_id/status')
   changeStatus(
     @Param('project_id', ParseUUIDPipe) projectId: string,
@@ -172,7 +178,9 @@ export class IssuesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or issue not found' })
-  @ApiConflictResponse({ description: 'Issue is not in active sprint board' })
+  @ApiConflictResponse({
+    description: 'Archived project is read-only or issue is not in active sprint board',
+  })
   @Patch(':issue_id/position')
   reorder(
     @Param('project_id', ParseUUIDPipe) projectId: string,

@@ -104,4 +104,54 @@ describe('ProjectsService', () => {
 
     expect(project.is_archived).toBe(true);
   });
+
+  it('update() should reject archived project changes unless request unarchives it', async () => {
+    prisma.projects.findFirst.mockResolvedValue({
+      id: 'project-1',
+      owner_id: 'owner-1',
+      deleted_at: null,
+      is_archived: true,
+    });
+
+    await expect(
+      service.update('project-1', 'owner-1', {
+        name: 'Renamed archived project',
+      }),
+    ).rejects.toThrow('Archived project is read-only');
+    expect(prisma.projects.update).not.toHaveBeenCalled();
+  });
+
+  it('update() should allow unarchiving archived project', async () => {
+    prisma.projects.findFirst.mockResolvedValue({
+      id: 'project-1',
+      owner_id: 'owner-1',
+      deleted_at: null,
+      is_archived: true,
+    });
+    prisma.projects.update.mockResolvedValue({
+      id: 'project-1',
+      name: 'AML Task Manager',
+      project_key: 'AML',
+      description: null,
+      owner_id: 'owner-1',
+      is_archived: false,
+      created_at: new Date('2026-05-01T10:00:00.000Z'),
+      updated_at: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    const project = await service.update('project-1', 'owner-1', {
+      is_archived: false,
+    });
+
+    expect(prisma.projects.update).toHaveBeenCalledWith({
+      where: {
+        id: 'project-1',
+      },
+      data: expect.objectContaining({
+        is_archived: false,
+        updated_at: expect.any(Date),
+      }),
+    });
+    expect(project.is_archived).toBe(false);
+  });
 });

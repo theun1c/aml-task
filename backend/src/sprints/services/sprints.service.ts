@@ -19,6 +19,7 @@ export class SprintsService {
 
   async create(projectId: string, userId: string, dto: CreateSprintDto): Promise<SprintResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
     this.ensureDateRange(
       dto.start_date ? new Date(dto.start_date) : null,
       dto.end_date ? new Date(dto.end_date) : null,
@@ -84,6 +85,7 @@ export class SprintsService {
 
   async start(projectId: string, sprintId: string, userId: string): Promise<SprintResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
 
@@ -133,6 +135,7 @@ export class SprintsService {
 
   async complete(projectId: string, sprintId: string, userId: string): Promise<SprintResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
 
@@ -218,6 +221,7 @@ export class SprintsService {
     dto: UpdateSprintDto,
   ): Promise<SprintResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
 
@@ -275,6 +279,7 @@ export class SprintsService {
 
   async delete(projectId: string, sprintId: string, userId: string): Promise<void> {
     await this.projectsService.ensureProjectMember(projectId, userId);
+    await this.projectsService.ensureProjectWritable(projectId);
 
     const sprint = await this.findSprintEntityOrThrow(projectId, sprintId);
 

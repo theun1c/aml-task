@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import {
+  ApiConflictResponse,
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -36,6 +37,7 @@ export class CommentsController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or issue not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Param('project_id') projectId: string,
@@ -67,6 +69,7 @@ export class CommentsController {
     description: 'User is not a project member or is not comment author',
   })
   @ApiNotFoundResponse({ description: 'Project, issue or comment not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   async update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('project_id') projectId: string,
@@ -85,6 +88,7 @@ export class CommentsController {
     description: 'User is not a project member or is not comment author',
   })
   @ApiNotFoundResponse({ description: 'Project, issue or comment not found' })
+  @ApiConflictResponse({ description: 'Archived project is read-only' })
   async delete(
     @CurrentUser() user: AuthenticatedUser,
     @Param('project_id') projectId: string,

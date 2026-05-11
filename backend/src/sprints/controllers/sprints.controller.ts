@@ -51,7 +51,9 @@ export class SprintsController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project not found' })
-  @ApiConflictResponse({ description: 'Sprint with this name already exists in project' })
+  @ApiConflictResponse({
+    description: 'Sprint with this name already exists in project or archived project is read-only',
+  })
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Param('project_id', ParseUUIDPipe) projectId: string,
@@ -108,7 +110,8 @@ export class SprintsController {
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or sprint not found' })
   @ApiConflictResponse({
-    description: 'Only planned sprint can be updated or sprint name already exists in project',
+    description:
+      'Archived project is read-only, only planned sprint can be updated or sprint name already exists in project',
   })
   async update(
     @CurrentUser() user: AuthenticatedUser,
@@ -127,7 +130,7 @@ export class SprintsController {
   @ApiNotFoundResponse({ description: 'Project or sprint not found' })
   @ApiConflictResponse({
     description:
-      'Only planned sprint can be started, project already has active sprint, or sprint has no issues',
+      'Archived project is read-only, only planned sprint can be started, project already has active sprint, or sprint has no issues',
   })
   async start(
     @CurrentUser() user: AuthenticatedUser,
@@ -144,7 +147,8 @@ export class SprintsController {
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or sprint not found' })
   @ApiConflictResponse({
-    description: 'Only active sprint can be completed or project final status is not configured',
+    description:
+      'Archived project is read-only, only active sprint can be completed or project final status is not configured',
   })
   async complete(
     @CurrentUser() user: AuthenticatedUser,
@@ -161,7 +165,9 @@ export class SprintsController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or sprint not found' })
-  @ApiConflictResponse({ description: 'Only planned sprint can be deleted' })
+  @ApiConflictResponse({
+    description: 'Archived project is read-only or only planned sprint can be deleted',
+  })
   async delete(
     @CurrentUser() user: AuthenticatedUser,
     @Param('project_id', ParseUUIDPipe) projectId: string,

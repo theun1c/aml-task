@@ -20,6 +20,7 @@ describe('ProjectMembersService', () => {
   let projectsService: {
     ensureProjectOwner: jest.Mock;
     ensureProjectMember: jest.Mock;
+    ensureProjectWritable: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -39,6 +40,7 @@ describe('ProjectMembersService', () => {
     projectsService = {
       ensureProjectOwner: jest.fn(),
       ensureProjectMember: jest.fn(),
+      ensureProjectWritable: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -60,6 +62,10 @@ describe('ProjectMembersService', () => {
 
   it('should add member by normalized email', async () => {
     projectsService.ensureProjectOwner.mockResolvedValue({
+      id: 'project-1',
+      owner_id: 'owner-1',
+    });
+    projectsService.ensureProjectWritable.mockResolvedValue({
       id: 'project-1',
       owner_id: 'owner-1',
     });
@@ -116,6 +122,10 @@ describe('ProjectMembersService', () => {
 
   it('should restore inactive member found by normalized email', async () => {
     projectsService.ensureProjectOwner.mockResolvedValue({
+      id: 'project-1',
+      owner_id: 'owner-1',
+    });
+    projectsService.ensureProjectWritable.mockResolvedValue({
       id: 'project-1',
       owner_id: 'owner-1',
     });

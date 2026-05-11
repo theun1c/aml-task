@@ -23,6 +23,7 @@ describe('SprintsService', () => {
   };
   let projectsService: {
     ensureProjectMember: jest.Mock;
+    ensureProjectWritable: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -45,6 +46,7 @@ describe('SprintsService', () => {
 
     projectsService = {
       ensureProjectMember: jest.fn(),
+      ensureProjectWritable: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -70,6 +72,7 @@ describe('SprintsService', () => {
 
   it('start() should reject empty sprint without issues', async () => {
     projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    projectsService.ensureProjectWritable.mockResolvedValue(undefined);
     prisma.sprints.findFirst
       .mockResolvedValueOnce({
         id: 'sprint-1',
@@ -116,6 +119,7 @@ describe('SprintsService', () => {
 
   it('create() should reject invalid sprint date range', async () => {
     projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    projectsService.ensureProjectWritable.mockResolvedValue(undefined);
 
     await expect(
       service.create('project-1', 'user-1', {
@@ -129,6 +133,7 @@ describe('SprintsService', () => {
 
   it('complete() should move unfinished sprint issues to backlog with appended rank positions', async () => {
     projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    projectsService.ensureProjectWritable.mockResolvedValue(undefined);
     prisma.sprints.findFirst.mockResolvedValue({
       id: 'sprint-1',
       project_id: 'project-1',
@@ -261,6 +266,7 @@ describe('SprintsService', () => {
 
   it('update() should reject non-planned sprint', async () => {
     projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    projectsService.ensureProjectWritable.mockResolvedValue(undefined);
     prisma.sprints.findFirst.mockResolvedValue(
       createSprintEntity({
         id: 'sprint-1',
@@ -279,6 +285,7 @@ describe('SprintsService', () => {
 
   it('delete() should move sprint issues to backlog before removing planned sprint', async () => {
     projectsService.ensureProjectMember.mockResolvedValue(undefined);
+    projectsService.ensureProjectWritable.mockResolvedValue(undefined);
     prisma.sprints.findFirst.mockResolvedValue(
       createSprintEntity({
         id: 'sprint-1',
