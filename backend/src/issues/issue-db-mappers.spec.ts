@@ -4,6 +4,7 @@ import {
   rankPositionFromIndex,
   rankPositionToNumber,
 } from './issue-db-mappers';
+import { ConflictException } from '@nestjs/common';
 
 const decimal = (value: number) => ({
   toNumber: () => value,
@@ -14,6 +15,13 @@ describe('issue-db-mappers', () => {
   it('mapDbIssueTypeCodeToApiType() should keep supported MVP type codes', () => {
     expect(mapDbIssueTypeCodeToApiType('task')).toBe('task');
     expect(mapDbIssueTypeCodeToApiType('bug')).toBe('bug');
+  });
+
+  it('mapDbIssueTypeCodeToApiType() should throw ConflictException for unsupported DB type code', () => {
+    expect(() => mapDbIssueTypeCodeToApiType('story')).toThrow(ConflictException);
+    expect(() => mapDbIssueTypeCodeToApiType('story')).toThrow(
+      'Issue type "story" is not supported by API',
+    );
   });
 
   it('rankPositionFromIndex() should create a Prisma Decimal index value', () => {

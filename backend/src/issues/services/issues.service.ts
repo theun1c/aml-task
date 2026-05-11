@@ -179,10 +179,7 @@ export class IssuesService {
   ): Promise<IssueResponse> {
     await this.issuesAccessService.getProjectAccess(projectId, user.id);
     const issue = await this.issuesAccessService.getIssueOrThrow(projectId, issueId);
-
-    if (issue.sprint_id === null) {
-      throw new ConflictException('Cannot change issue status outside sprint board');
-    }
+    await this.ensureIssueInActiveSprintBoard(projectId, issue.sprint_id);
 
     if (issue.status_id === dto.status_id) {
       return this.toIssueResponse(issue);
@@ -221,5 +218,28 @@ export class IssuesService {
 
   private toIssueResponse(issue: IssueEntity): IssueResponse {
     return mapIssueToResponse(issue);
+  }
+
+  private async ensureIssueInActiveSprintBoard(
+    projectId: string,
+    sprintId: string | null,
+  ): Promise<void> {
+    if (sprintId === null) {
+      throw new ConflictException('Cannot change issue status outside active sprint board');
+    }
+
+    const sprint = await this.prisma.sprints.findUnique({
+      where: {
+        id: sprintId,
+      },
+      select: {
+        project_id: true,
+        status: true,
+      },
+    });
+
+    if (!sprint || sprint.project_id !== projectId || sprint.status !== 'active') {
+      throw new ConflictException('Cannot change issue status outside active sprint board');
+    }
   }
 }

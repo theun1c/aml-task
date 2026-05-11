@@ -22,6 +22,10 @@ export class AuthService {
     return createHash('sha256').update(token).digest('hex');
   }
 
+  private isUserUnavailable(user: { is_active: boolean; deleted_at: Date | null }): boolean {
+    return !user.is_active || user.deleted_at !== null;
+  }
+
   // HELPFUL
   // emailNormalize
   // cleanup email
@@ -177,6 +181,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (this.isUserUnavailable(user)) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     const validPassword = await bcrypt.compare(dto.password, user.password_hash);
 
     if (!validPassword) {
@@ -220,6 +228,10 @@ export class AuthService {
 
     if (!session.users) {
       throw new UnauthorizedException('User not found');
+    }
+
+    if (this.isUserUnavailable(session.users)) {
+      throw new UnauthorizedException('Invalid refresh token');
     }
 
     if (session.user_id !== payload.sub) {

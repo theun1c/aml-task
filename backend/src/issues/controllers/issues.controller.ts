@@ -153,7 +153,7 @@ export class IssuesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project, issue or status not found' })
-  @ApiConflictResponse({ description: 'Issue is not in sprint board' })
+  @ApiConflictResponse({ description: 'Issue is not in active sprint board' })
   @Patch(':issue_id/status')
   changeStatus(
     @Param('project_id', ParseUUIDPipe) projectId: string,

@@ -1,26 +1,35 @@
-# AML-task backend
+# AML Task Manager Backend
 
-Backend для AML Task Manager.
+Backend для AML Task Manager на `NestJS + Prisma + PostgreSQL`.
 
-Сейчас это NestJS API с Prisma/PostgreSQL, Swagger-документацией и базовым модулем авторизации.
+## Текущее состояние
 
-## Локальная dev-разработка
+В кодовой базе уже есть модули:
+- `auth`
+- `users`
+- `projects`
+- `statuses`
+- `sprints`
+- `issues`
+- `comments`
 
-Проект работает в режиме `remote-db only`: backend запускается локально, а Prisma и приложение подключаются к удаленной PostgreSQL через SSH-туннель.
+При этом детально задокументированы пока только:
+- `auth`
+- `issues`
 
-Основные файлы:
+Для остальных модулей код уже существует, но документация еще синхронизируется с фактическим поведением.
 
-- `.env.prod` — основной env-файл для подключения к удаленной БД через локальный SSH-туннель.
-- `Makefile` — основной entrypoint для dev-команд.
-- `.env.example` — шаблон переменных для remote DB режима.
+## Основной dev-flow
 
-Рекомендуемый сценарий запуска:
+Сейчас проект ориентирован на работу с уже существующей PostgreSQL schema.
 
-```bash
-make ssh-tunnel
-```
+То есть текущий flow такой:
+1. Подготовить `.env.dev` на основе `.env.example`.
+2. Указать рабочий `DATABASE_URL` на существующую БД со schema `aml_task`.
+3. Выполнить `make sync-db-schema`, чтобы подтянуть актуальную Prisma schema и client.
+4. Запустить приложение через `make start-dev`.
 
-В отдельном терминале:
+Команды:
 
 ```bash
 make sync-db-schema
@@ -28,133 +37,73 @@ make start-dev
 ```
 
 Что делает этот flow:
-
 - выполняет `prisma db pull`;
 - выполняет `prisma generate`;
-- запускает backend через `npm run start:dev` против удаленной БД.
+- запускает backend локально.
 
-Полезные dev-команды:
+## Локальная инфраструктура
 
-- `make ssh-tunnel` — открыть SSH-туннель к удаленной PostgreSQL.
-- `make sync-db-schema` — подтянуть актуальную схему из БД и пересобрать Prisma Client.
-- `make start-dev` — запустить backend локально.
-- `make develop` — выполнить `sync-db-schema`, затем запустить backend.
+В репозитории есть `docker-compose.dev.yaml` с PostgreSQL-контейнером.
 
-Если `ENV_FILE` не передан явно, в `Makefile` по умолчанию используется `.env.prod`.
-
-## Подключение к удаленной БД
-
-База данных на сервере недоступна напрямую извне, поэтому подключение идет через SSH-туннель:
-
-```text
-localhost:5433 on your machine
--> SSH tunnel
--> 127.0.0.1:5432 on the server
--> PostgreSQL
-```
-
-Пример:
+Полезные команды:
 
 ```bash
-ssh -L 5433:127.0.0.1:5432 theun1c@194.156.118.99
+make postgres-dev-up
+make postgres-dev-down
 ```
 
-После этого `DATABASE_URL` в `.env.prod` может оставаться в формате:
+Важно:
+- этот контейнер сам по себе не заменяет миграции или инициализацию схемы;
+- в репозитории сейчас нет полного migration-based локального bootstrap flow;
+- поэтому docker-режим полезен только если у тебя уже есть способ подготовить нужную схему БД.
 
-```env
-DATABASE_URL=postgresql://aml_user:root123@localhost:5433/aml_db?schema=aml_task
+## Переменные окружения
+
+Шаблон переменных лежит в `.env.example`.
+
+Минимально важные переменные:
+- `PORT`
+- `DATABASE_URL`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `JWT_ACCESS_TTL`
+- `JWT_REFRESH_TTL`
+
+В репозиторий не должны попадать реальные хосты, логины, пароли, токены и другие рабочие доступы.
+
+## Проверка проекта
+
+Основные команды проверки:
+
+```bash
+npm run build
+npm test -- --runInBand
+npm run test:e2e -- --runInBand
 ```
-
-## Где доступен backend
-
-- Swagger / API docs: [http://194.156.118.99/api/docs](http://194.156.118.99/api/docs)
-- Базовый префикс API: `http://194.156.118.99/api`
-- Healthcheck: `GET http://194.156.118.99/api/health`
-
-Проект сейчас доступен в тестовом режиме.
-
-## Что уже реализовано
-
-### `auth`
-
-Сейчас в backend реализован модуль авторизации:
-- `POST /auth/register`
-- `POST /auth/login`
-- `POST /auth/refresh`
-- `GET /auth/me`
-- `POST /auth/logout`
-- `POST /auth/logout-all`
-- `GET /auth/sessions`
-
-Что уже есть внутри:
-- регистрация и логин по `email + password`;
-- access и refresh токены;
-- refresh rotation;
-- logout текущей сессии;
-- logout всех сессий;
-- получение текущего пользователя;
-- просмотр активных сессий;
-- Swagger-описание auth endpoint;
-- базовые unit и e2e тесты.
-
-### `health`
-
-Есть технический endpoint для проверки доступности backend:
-- `GET /health`
 
 ## Архитектура
 
 Backend строится как модульный монолит.
 
-Основная идея:
-- проект делится по доменным модулям;
-- внутри каждого модуля есть своя структура;
-- инфраструктура отделяется от бизнес-логики.
+Основные ориентиры:
+- доменное деление по модулям;
+- тонкие controllers;
+- бизнес-логика в services;
+- доступ к БД через Prisma;
+- публичный REST API в `snake_case`.
 
-Текущая базовая структура:
+Подробности:
+- [docs/product/ARCHITECTURE.md](docs/product/ARCHITECTURE.md)
+- [docs/product/TECH_SPEC.md](docs/product/TECH_SPEC.md)
+- [docs/ai/CONTEXT.md](docs/ai/CONTEXT.md)
 
-```text
-src/
-  auth/
-  users/
-  projects/
-  issues/
-  comments/
-  infrastructure/
-  common/
-```
+## Документация по фичам
 
-Внутри модулей используется layered-структура:
-- `controllers` — HTTP-вход;
-- `services` — бизнес-логика;
-- `dto` — входные модели и валидация;
-- `responses` — модели ответов;
-- `repositories` — слой доступа к данным по мере роста логики.
+Сейчас оформлены:
+- [docs/ai/features/001-auth/SPEC.md](docs/ai/features/001-auth/SPEC.md)
+- [docs/ai/features/001-auth/TASKS.md](docs/ai/features/001-auth/TASKS.md)
+- [docs/ai/features/002-issues/SPEC.md](docs/ai/features/002-issues/SPEC.md)
+- [docs/ai/features/002-issues/TASKS.md](docs/ai/features/002-issues/TASKS.md)
 
-Отдельно архитектура зафиксирована в [docs/product/ARCHITECTURE.md](docs/product/ARCHITECTURE.md).
-
-## Какие модули уже есть в проекте
-
-- `auth`
-- `infrastructure/prisma`
-- `health`
-- `users`
-- `issues`
-
-## Ближайшие задачи
-
-Важное:
-- продолжить развитие backend-модулей кроме `auth`;
-- стабилизировать flow синхронизации Prisma со схемой удаленной БД;
-- почистить проект от лишних dev-артефактов.
-
-Технический следующий шаг:
-- разгрузить `AuthService`;
-- начать выносить повторяющиеся Prisma-запросы в `repositories`;
-- описать деплой backend;
-- протестировать сервер на нагрузку и отказоустойчивость.
-
-## Документация
-
-- Архитектура: [docs/product/ARCHITECTURE.md](docs/product/ARCHITECTURE.md)
-- Техническое задание: [docs/product/TECH_SPEC.md](docs/product/TECH_SPEC.md)
+Для ревью используется:
+- [docs/ai/REVIEW_CHECKLIST.md](docs/ai/REVIEW_CHECKLIST.md)

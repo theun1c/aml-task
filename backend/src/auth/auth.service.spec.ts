@@ -1,5 +1,6 @@
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { createHash } from 'crypto';
+import * as bcrypt from 'bcrypt';
 
 jest.mock('../infrastructure/prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
@@ -54,6 +55,18 @@ describe('AuthService', () => {
   });
 
   const hashRefreshToken = (value: string) => createHash('sha256').update(value).digest('hex');
+  const validPasswordHash = bcrypt.hashSync('strongPass123', 4);
+
+  const mockIssuedTokens = () => {
+    prisma.user_sessions.create.mockResolvedValue({
+      id: 's1',
+    });
+    prisma.user_sessions.update.mockResolvedValue({
+      id: 's1',
+    });
+    tokenService.generateAccessToken.mockResolvedValue('access-token');
+    tokenService.generateRefreshToken.mockResolvedValue('refresh-token');
+  };
 
   it('register() should throw ConflictException when user with normalized email already exists', async () => {
     prisma.users.findUnique.mockResolvedValue({
@@ -94,6 +107,48 @@ describe('AuthService', () => {
       service.login({
         email: 'user@example.com',
         password: 'wrongPass123',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('login() should throw UnauthorizedException for inactive user', async () => {
+    mockIssuedTokens();
+    prisma.users.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      full_name: 'User',
+      password_hash: validPasswordHash,
+      is_active: false,
+      deleted_at: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    await expect(
+      service.login({
+        email: 'user@example.com',
+        password: 'strongPass123',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('login() should throw UnauthorizedException for soft-deleted user', async () => {
+    mockIssuedTokens();
+    prisma.users.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      full_name: 'User',
+      password_hash: validPasswordHash,
+      is_active: true,
+      deleted_at: new Date(),
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    await expect(
+      service.login({
+        email: 'user@example.com',
+        password: 'strongPass123',
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
@@ -156,6 +211,78 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(tokenService.generateAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('refresh() should throw UnauthorizedException when session user is inactive', async () => {
+    tokenService.verifyRefreshToken.mockResolvedValue({
+      sub: 'u1',
+      sid: 's1',
+      type: 'refresh',
+    });
+    tokenService.generateAccessToken.mockResolvedValue('access-token');
+    tokenService.generateRefreshToken.mockResolvedValue('refresh-token');
+    prisma.user_sessions.update.mockResolvedValue({
+      id: 's1',
+    });
+    prisma.user_sessions.findUnique.mockResolvedValue({
+      id: 's1',
+      user_id: 'u1',
+      is_revoked: false,
+      refresh_token_hash: hashRefreshToken('refresh-token-value'),
+      revoked_at: null,
+      expires_at: new Date(Date.now() + 60_000),
+      created_at: new Date(),
+      updated_at: new Date(),
+      users: {
+        id: 'u1',
+        email: 'user@example.com',
+        full_name: 'User',
+        is_active: false,
+        deleted_at: null,
+      },
+    });
+
+    await expect(
+      service.refresh({
+        refresh_token: 'refresh-token-value',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('refresh() should throw UnauthorizedException when session user is soft-deleted', async () => {
+    tokenService.verifyRefreshToken.mockResolvedValue({
+      sub: 'u1',
+      sid: 's1',
+      type: 'refresh',
+    });
+    tokenService.generateAccessToken.mockResolvedValue('access-token');
+    tokenService.generateRefreshToken.mockResolvedValue('refresh-token');
+    prisma.user_sessions.update.mockResolvedValue({
+      id: 's1',
+    });
+    prisma.user_sessions.findUnique.mockResolvedValue({
+      id: 's1',
+      user_id: 'u1',
+      is_revoked: false,
+      refresh_token_hash: hashRefreshToken('refresh-token-value'),
+      revoked_at: null,
+      expires_at: new Date(Date.now() + 60_000),
+      created_at: new Date(),
+      updated_at: new Date(),
+      users: {
+        id: 'u1',
+        email: 'user@example.com',
+        full_name: 'User',
+        is_active: true,
+        deleted_at: new Date(),
+      },
+    });
+
+    await expect(
+      service.refresh({
+        refresh_token: 'refresh-token-value',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('logoutCurrentSession() should set both is_revoked and revoked_at', async () => {

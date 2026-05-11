@@ -140,7 +140,6 @@ export class ProjectsService {
       },
       data: {
         is_archived: true,
-        deleted_at: new Date(),
         updated_at: new Date(),
       },
     });

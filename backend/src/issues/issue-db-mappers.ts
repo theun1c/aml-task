@@ -1,3 +1,5 @@
+import { ConflictException } from '@nestjs/common';
+
 type IssueApiType = 'task' | 'bug';
 
 type DecimalLike = {
@@ -31,7 +33,7 @@ export function mapDbIssueTypeCodeToApiType(code: string): IssueApiType {
     return code;
   }
 
-  throw new Error(`Unsupported issue type code: ${code}`);
+  throw new ConflictException(`Issue type "${code}" is not supported by API`);
 }
 
 export function rankPositionFromIndex(index: number): number {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -81,6 +81,26 @@ export class StatusesController {
     @Body() dto: UpdateStatusDto,
   ): Promise<StatusResponse> {
     return this.statusesService.update(projectId, statusId, this.getUserId(user), dto);
+  }
+
+  @Delete(':status_id')
+  @ApiOperation({ summary: 'Delete project status and move its issues to the first remaining column' })
+  @ApiOkResponse({ type: StatusResponse })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({
+    description: 'Only project owner can perform this action',
+  })
+  @ApiNotFoundResponse({ description: 'Project or status not found' })
+  @ApiConflictResponse({
+    description:
+      'Project must have at least one status or status is referenced by related records',
+  })
+  async remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('project_id') projectId: string,
+    @Param('status_id') statusId: string,
+  ): Promise<StatusResponse> {
+    return this.statusesService.remove(projectId, statusId, this.getUserId(user));
   }
 
   private getUserId(user: AuthenticatedUser): string {

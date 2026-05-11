@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { ProjectsService } from '../../projects/services/projects.service';
 import { CreateStatusDto } from '../dto/create-status.dto';
@@ -72,27 +77,191 @@ export class StatusesService {
   ): Promise<StatusResponse> {
     await this.projectsService.ensureProjectOwner(projectId, userId);
 
-    await this.findStatusEntityOrThrow(projectId, statusId);
+    const existingStatus = await this.findStatusEntityOrThrow(projectId, statusId);
 
     try {
-      const status = await this.prisma.statuses.update({
-        where: {
-          id: statusId,
-        },
-        data: {
-          ...(dto.name !== undefined ? { name: dto.name } : {}),
-          ...(dto.category !== undefined ? { category: dto.category } : {}),
-          ...(dto.color !== undefined ? { color: dto.color } : {}),
-          ...(dto.position !== undefined ? { position: dto.position } : {}),
-          ...(dto.is_final !== undefined ? { is_final: dto.is_final } : {}),
-          updated_at: new Date(),
-        },
+      const shouldReorder =
+        dto.position !== undefined && dto.position !== existingStatus.position;
+
+      if (!shouldReorder) {
+        const status = await this.prisma.statuses.update({
+          where: {
+            id: statusId,
+          },
+          data: {
+            ...this.buildStatusUpdateData(dto),
+            ...(dto.position !== undefined ? { position: dto.position } : {}),
+            updated_at: new Date(),
+          },
+        });
+
+        return this.toStatusResponse(status);
+      }
+
+      const status = await this.prisma.$transaction(async (tx) => {
+        const statuses = await tx.statuses.findMany({
+          where: {
+            project_id: projectId,
+          },
+          orderBy: {
+            position: 'asc',
+          },
+        });
+
+        if (dto.position! < 0 || dto.position! >= statuses.length) {
+          throw new BadRequestException('Status position is out of range');
+        }
+
+        const reorderedStatusIds = statuses
+          .filter((status) => status.id !== statusId)
+          .map((status) => status.id);
+
+        reorderedStatusIds.splice(dto.position!, 0, statusId);
+
+        const now = new Date();
+        const offset = statuses.length;
+        let updatedStatus: (typeof statuses)[number] | null = null;
+
+        for (const status of statuses) {
+          await tx.statuses.update({
+            where: {
+              id: status.id,
+            },
+            data: {
+              position: status.position + offset,
+              updated_at: now,
+            },
+          });
+        }
+
+        for (const [position, reorderedStatusId] of reorderedStatusIds.entries()) {
+          const reorderedStatus = await tx.statuses.update({
+            where: {
+              id: reorderedStatusId,
+            },
+            data: {
+              position,
+              updated_at: now,
+              ...(reorderedStatusId === statusId ? this.buildStatusUpdateData(dto) : {}),
+            },
+          });
+
+          if (reorderedStatusId === statusId) {
+            updatedStatus = reorderedStatus;
+          }
+        }
+
+        if (!updatedStatus) {
+          throw new NotFoundException('Status not found');
+        }
+
+        return updatedStatus;
       });
 
       return this.toStatusResponse(status);
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
         throw new ConflictException('Status with this name or position already exists in project');
+      }
+
+      throw error;
+    }
+  }
+
+  async remove(projectId: string, statusId: string, userId: string): Promise<StatusResponse> {
+    await this.projectsService.ensureProjectOwner(projectId, userId);
+
+    await this.findStatusEntityOrThrow(projectId, statusId);
+
+    try {
+      const removedStatus = await this.prisma.$transaction(async (tx) => {
+        const statuses = await tx.statuses.findMany({
+          where: {
+            project_id: projectId,
+          },
+          orderBy: {
+            position: 'asc',
+          },
+        });
+
+        if (statuses.length <= 1) {
+          throw new ConflictException('Project must have at least one status');
+        }
+
+        const targetStatus = statuses.find((status) => status.id === statusId);
+
+        if (!targetStatus) {
+          throw new NotFoundException('Status not found');
+        }
+
+        const remainingStatuses = statuses.filter((status) => status.id !== statusId);
+        const fallbackStatus = remainingStatuses[0];
+        const now = new Date();
+
+        await tx.issues.updateMany({
+          where: {
+            project_id: projectId,
+            status_id: statusId,
+            deleted_at: null,
+          },
+          data: {
+            status_id: fallbackStatus.id,
+            updated_at: now,
+          },
+        });
+
+        if (targetStatus.is_default) {
+          await tx.statuses.updateMany({
+            where: {
+              project_id: projectId,
+              id: {
+                not: statusId,
+              },
+            },
+            data: {
+              is_default: false,
+              updated_at: now,
+            },
+          });
+
+          await tx.statuses.update({
+            where: {
+              id: fallbackStatus.id,
+            },
+            data: {
+              is_default: true,
+              updated_at: now,
+            },
+          });
+        }
+
+        await tx.statuses.delete({
+          where: {
+            id: statusId,
+          },
+        });
+
+        for (const [position, status] of remainingStatuses.entries()) {
+          await tx.statuses.update({
+            where: {
+              id: status.id,
+            },
+            data: {
+              position,
+              updated_at: now,
+            },
+          });
+        }
+
+        return targetStatus;
+      });
+
+      return this.toStatusResponse(removedStatus);
+    } catch (error) {
+      if (this.isForeignKeyConstraintError(error)) {
+        throw new ConflictException(
+          'Status cannot be deleted because it is referenced by related records',
+        );
       }
 
       throw error;
@@ -142,5 +311,18 @@ export class StatusesService {
 
   private isUniqueConstraintError(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+  }
+
+  private buildStatusUpdateData(dto: UpdateStatusDto) {
+    return {
+      ...(dto.name !== undefined ? { name: dto.name } : {}),
+      ...(dto.category !== undefined ? { category: dto.category } : {}),
+      ...(dto.color !== undefined ? { color: dto.color } : {}),
+      ...(dto.is_final !== undefined ? { is_final: dto.is_final } : {}),
+    };
+  }
+
+  private isForeignKeyConstraintError(error: unknown): boolean {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003';
   }
 }

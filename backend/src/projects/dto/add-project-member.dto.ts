@@ -1,11 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail } from 'class-validator';
 
 export class AddProjectMemberDto {
   @ApiProperty({
-    example: '47f5f4dc-8e52-44a1-9f08-a4ff5d9fdd53',
-    description: 'User id to add as project member',
+    example: 'member@example.com',
+    description: 'User email to add as project member',
   })
-  @IsUUID()
-  user_id: string;
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsEmail()
+  email: string;
 }

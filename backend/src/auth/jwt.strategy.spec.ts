@@ -64,4 +64,56 @@ describe('JwtStrategy', () => {
 
     expect(prisma.users.findUnique).not.toHaveBeenCalled();
   });
+
+  it('validate() should reject inactive user', async () => {
+    prisma.user_sessions.findUnique.mockResolvedValue({
+      id: 's1',
+      user_id: 'u1',
+      is_revoked: false,
+      revoked_at: null,
+      expires_at: new Date(Date.now() + 60_000),
+    });
+    prisma.users.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      full_name: 'User Name',
+      is_active: false,
+      deleted_at: null,
+    });
+
+    await expect(
+      strategy.validate({
+        sub: 'u1',
+        sid: 's1',
+        email: 'user@example.com',
+        type: 'access',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('validate() should reject soft-deleted user', async () => {
+    prisma.user_sessions.findUnique.mockResolvedValue({
+      id: 's1',
+      user_id: 'u1',
+      is_revoked: false,
+      revoked_at: null,
+      expires_at: new Date(Date.now() + 60_000),
+    });
+    prisma.users.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      full_name: 'User Name',
+      is_active: true,
+      deleted_at: new Date(),
+    });
+
+    await expect(
+      strategy.validate({
+        sub: 'u1',
+        sid: 's1',
+        email: 'user@example.com',
+        type: 'access',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
 });

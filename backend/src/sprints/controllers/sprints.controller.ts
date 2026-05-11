@@ -78,7 +78,8 @@ export class SprintsController {
   @ApiForbiddenResponse({ description: 'User is not a project member' })
   @ApiNotFoundResponse({ description: 'Project or sprint not found' })
   @ApiConflictResponse({
-    description: 'Only planned sprint can be started or project already has active sprint',
+    description:
+      'Only planned sprint can be started, project already has active sprint, or sprint has no issues',
   })
   async start(
     @CurrentUser() user: AuthenticatedUser,
