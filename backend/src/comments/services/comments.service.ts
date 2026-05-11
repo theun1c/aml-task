@@ -20,12 +20,13 @@ export class CommentsService {
   ): Promise<CommentResponse> {
     await this.projectsService.ensureProjectMember(projectId, userId);
     await this.ensureIssueBelongsToProject(projectId, issueId);
+    const normalizedContent = this.normalizeContent(dto.content);
 
     const comment = await this.prisma.comments.create({
       data: {
         issue_id: issueId,
         author_id: userId,
-        content: dto.content,
+        content: normalizedContent,
       },
       include: {
         users: {
@@ -76,6 +77,7 @@ export class CommentsService {
     await this.ensureIssueBelongsToProject(projectId, issueId);
 
     const comment = await this.findCommentEntityOrThrow(issueId, commentId);
+    const normalizedContent = this.normalizeContent(dto.content);
 
     if (comment.author_id !== userId) {
       throw new ForbiddenException('Only comment author can update this comment');
@@ -86,7 +88,7 @@ export class CommentsService {
         id: commentId,
       },
       data: {
-        content: dto.content,
+        content: normalizedContent,
         updated_at: new Date(),
       },
       include: {
@@ -194,5 +196,9 @@ export class CommentsService {
       author_email: comment.users?.email,
       author_full_name: comment.users?.full_name,
     };
+  }
+
+  private normalizeContent(content: string): string {
+    return content.trim();
   }
 }
