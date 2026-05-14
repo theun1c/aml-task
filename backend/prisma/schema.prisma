@@ -3,9 +3,9 @@ generator client {
   output                 = "../generated/prisma"
   previewFeatures        = ["partialIndexes"]
   generatedFileExtension = "ts"
+  importFileExtension    = "js"
   moduleFormat           = "cjs"
   runtime                = "nodejs"
-  importFileExtension    = "ts"
 }
 
 datasource db {

@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { RabbitMQService } from '../../infrastructure/rabbitmq/rabbitmq.service';
 import type { AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { CreateIssueDto } from '../dto/create-issue.dto';
 import { UpdateIssueDto } from '../dto/update-issue.dto';
@@ -20,6 +21,7 @@ export class IssuesService {
     private readonly issuesRepository: IssuesRepository,
     private readonly issuesAccessService: IssuesAccessService,
     private readonly issuesPositionService: IssuesPositionService,
+    private readonly rabbitmq: RabbitMQService,
   ) {}
 
   async create(
@@ -57,7 +59,21 @@ export class IssuesService {
       });
     });
 
-    return this.toIssueResponse(createdIssue);
+    const response = this.toIssueResponse(createdIssue);
+    
+    // Publish notification event
+    await this.rabbitmq.publishNotification({
+      type: 'ISSUE_CREATED',
+      userId: user.id,
+      projectId,
+      data: {
+        issueId: createdIssue.id,
+        title: createdIssue.title,
+        assigneeId: createdIssue.assignee_id,
+      },
+    });
+
+    return response;
   }
 
   async getById(
