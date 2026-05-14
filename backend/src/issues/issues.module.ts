@@ -5,9 +5,10 @@ import { IssuesAccessService } from './services/issues-access.service';
 import { IssuesPositionService } from './services/issues-position.service';
 import { IssuesService } from './services/issues.service';
 import { RabbitMQModule } from '../infrastructure/rabbitmq/rabbitmq.module';
+import { LoggerModule } from '../infrastructure/logger/logger.module';
 
 @Module({
-  imports: [RabbitMQModule],
+  imports: [RabbitMQModule, LoggerModule],
   controllers: [IssuesController],
   providers: [IssuesRepository, IssuesAccessService, IssuesPositionService, IssuesService],
 })

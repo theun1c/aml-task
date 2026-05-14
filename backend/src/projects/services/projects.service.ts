@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { Cacheable } from '../../infrastructure/cache/cache.decorator';
 import { CreateProjectDto } from '../dto/create-project.dto';
 import { UpdateProjectDto } from '../dto/update-project.dto';
 import { ProjectResponse } from '../responses/project.response';
@@ -39,7 +40,7 @@ export class ProjectsService {
               project_id: createdProject.id,
               name: 'To Do',
               category: 'todo',
-              position: 0,
+              position: 1,
               color: '#6B7280',
               is_default: true,
               is_final: false,
@@ -48,7 +49,7 @@ export class ProjectsService {
               project_id: createdProject.id,
               name: 'In Progress',
               category: 'in_progress',
-              position: 1,
+              position: 2,
               color: '#3B82F6',
               is_default: false,
               is_final: false,
@@ -57,7 +58,7 @@ export class ProjectsService {
               project_id: createdProject.id,
               name: 'Done',
               category: 'done',
-              position: 2,
+              position: 3,
               color: '#22C55E',
               is_default: false,
               is_final: true,
@@ -78,6 +79,7 @@ export class ProjectsService {
     }
   }
 
+  @Cacheable(600) // кеш на 10 минут
   async findAllForUser(userId: string): Promise<ProjectResponse[]> {
     const projects = await this.prisma.projects.findMany({
       where: {
@@ -97,6 +99,7 @@ export class ProjectsService {
     return projects.map((project) => this.toProjectResponse(project));
   }
 
+  @Cacheable(600) // кеш на 10 минут
   async findByIdForUser(projectId: string, userId: string): Promise<ProjectResponse> {
     await this.ensureProjectMember(projectId, userId);
 

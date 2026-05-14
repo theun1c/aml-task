@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { RabbitMQService } from '../../infrastructure/rabbitmq/rabbitmq.service';
+import { PinoLoggerService } from '../../infrastructure/logger/pino-logger.service';
 import type { AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { CreateIssueDto } from '../dto/create-issue.dto';
 import { UpdateIssueDto } from '../dto/update-issue.dto';
@@ -22,6 +23,7 @@ export class IssuesService {
     private readonly issuesAccessService: IssuesAccessService,
     private readonly issuesPositionService: IssuesPositionService,
     private readonly rabbitmq: RabbitMQService,
+    private readonly logger: PinoLoggerService,
   ) {}
 
   async create(
@@ -29,51 +31,69 @@ export class IssuesService {
     user: AuthenticatedUser,
     dto: CreateIssueDto,
   ): Promise<IssueResponse> {
-    const access = await this.issuesAccessService.getProjectAccess(projectId, user.id, {
-      requireWritable: true,
-    });
-    const defaultStatus = await this.issuesAccessService.getDefaultStatus(projectId);
-    const issueType = await this.issuesAccessService.getIssueTypeOrThrow(dto.type_code);
-    await this.issuesAccessService.validateAssignee(projectId, dto.assignee_id ?? null);
-
-    const createdIssue = await this.prisma.$transaction(async (tx) => {
-      const [position, issueNumber] = await Promise.all([
-        this.issuesRepository.getNextPosition(tx, {
-          projectId,
-          sprintId: null,
-        }),
-        this.issuesRepository.getNextIssueNumber(tx, projectId),
-      ]);
-
-      return this.issuesRepository.createTx(tx, {
-        project_id: projectId,
-        issue_number: issueNumber,
-        sprint_id: null,
-        status_id: defaultStatus.id,
-        reporter_id: access.member.user_id,
-        assignee_id: dto.assignee_id ?? null,
-        type_id: issueType.id,
-        title: dto.title,
-        description: dto.description ?? null,
-        rank_position: rankPositionFromIndex(position),
-      });
-    });
-
-    const response = this.toIssueResponse(createdIssue);
-    
-    // Publish notification event
-    await this.rabbitmq.publishNotification({
-      type: 'ISSUE_CREATED',
-      userId: user.id,
+    this.logger.info('Creating issue', {
       projectId,
-      data: {
-        issueId: createdIssue.id,
-        title: createdIssue.title,
-        assigneeId: createdIssue.assignee_id,
-      },
+      title: dto.title,
+      userId: user.id,
+      assigneeId: dto.assignee_id,
     });
 
-    return response;
+    try {
+      const access = await this.issuesAccessService.getProjectAccess(projectId, user.id, {
+        requireWritable: true,
+      });
+      const defaultStatus = await this.issuesAccessService.getDefaultStatus(projectId);
+      const issueType = await this.issuesAccessService.getIssueTypeOrThrow(dto.type_code);
+      await this.issuesAccessService.validateAssignee(projectId, dto.assignee_id ?? null);
+
+      const createdIssue = await this.prisma.$transaction(async (tx) => {
+        const [position, issueNumber] = await Promise.all([
+          this.issuesRepository.getNextPosition(tx, {
+            projectId,
+            sprintId: null,
+          }),
+          this.issuesRepository.getNextIssueNumber(tx, projectId),
+        ]);
+
+        return this.issuesRepository.createTx(tx, {
+          project_id: projectId,
+          issue_number: issueNumber,
+          sprint_id: null,
+          status_id: defaultStatus.id,
+          reporter_id: access.member.user_id,
+          assignee_id: dto.assignee_id ?? null,
+          type_id: issueType.id,
+          title: dto.title,
+          description: dto.description ?? null,
+          rank_position: rankPositionFromIndex(position),
+        });
+      });
+
+      const response = this.toIssueResponse(createdIssue);
+      
+      this.logger.info('Issue created successfully', {
+        issueId: createdIssue.id,
+        issueNumber: createdIssue.issue_number.toString(),
+        projectId,
+      });
+      
+      // Publish notification event
+      await this.rabbitmq.publishNotification({
+        type: 'ISSUE_CREATED',
+        userId: user.id,
+        projectId,
+        data: {
+          issueId: createdIssue.id,
+          title: createdIssue.title,
+          assigneeId: createdIssue.assignee_id,
+        },
+      });
+
+      return response;
+    } catch (error) {
+      this.logger.error('Failed to create issue', error);
+      throw error;
+    }
   }
 
   async getById(

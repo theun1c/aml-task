@@ -107,16 +107,16 @@ describe('StatusesService', () => {
 
   it('should reorder statuses when position changes', async () => {
     const statusesState = createStatusesState([
-      createStatusRecord('status-1', 0, {
+      createStatusRecord('status-1', 1, {
         name: 'To Do',
         category: 'todo',
         is_default: true,
       }),
-      createStatusRecord('status-2', 1, {
+      createStatusRecord('status-2', 2, {
         name: 'Review',
         category: 'in_progress',
       }),
-      createStatusRecord('status-3', 2, {
+      createStatusRecord('status-3', 3, {
         name: 'Done',
         category: 'done',
         is_final: true,
@@ -135,7 +135,7 @@ describe('StatusesService', () => {
     prisma.statuses.update.mockResolvedValue({
       ...statusesState.get('status-2'),
       name: 'Ready for Review',
-      position: 0,
+      position: 2,
     });
     tx.statuses.findMany.mockResolvedValue(getOrderedStatuses(statusesState));
     tx.statuses.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: Partial<StatusRecord> }) => {
@@ -152,12 +152,12 @@ describe('StatusesService', () => {
 
     const result = await service.update('project-1', 'status-2', 'owner-1', {
       name: 'Ready for Review',
-      position: 0,
+      position: 1,
     });
 
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(result.name).toBe('Ready for Review');
-    expect(result.position).toBe(0);
+    expect(result.position).toBe(2);
     expect(getOrderedStatuses(statusesState).map((status) => status.id)).toEqual([
       'status-2',
       'status-1',
@@ -167,16 +167,16 @@ describe('StatusesService', () => {
 
   it('should delete status, move issues to first remaining column and keep positions compact', async () => {
     const statusesState = createStatusesState([
-      createStatusRecord('status-1', 0, {
+      createStatusRecord('status-1', 1, {
         name: 'To Do',
         category: 'todo',
         is_default: true,
       }),
-      createStatusRecord('status-2', 1, {
+      createStatusRecord('status-2', 2, {
         name: 'In Progress',
         category: 'in_progress',
       }),
-      createStatusRecord('status-3', 2, {
+      createStatusRecord('status-3', 3, {
         name: 'Done',
         category: 'done',
         is_final: true,
@@ -247,8 +247,8 @@ describe('StatusesService', () => {
     });
     expect(result.id).toBe('status-1');
     expect(getOrderedStatuses(statusesState).map((status) => `${status.id}:${status.position}`)).toEqual([
-      'status-2:0',
-      'status-3:1',
+      'status-2:1',
+      'status-3:2',
     ]);
     expect(statusesState.get('status-2')?.is_default).toBe(true);
   });
@@ -259,14 +259,14 @@ describe('StatusesService', () => {
       owner_id: 'owner-1',
     });
     prisma.statuses.findFirst.mockResolvedValue(
-      createStatusRecord('status-1', 0, {
+      createStatusRecord('status-1', 1, {
         name: 'Only',
         category: 'todo',
         is_default: true,
       }),
     );
     tx.statuses.findMany.mockResolvedValue([
-      createStatusRecord('status-1', 0, {
+      createStatusRecord('status-1', 1, {
         name: 'Only',
         category: 'todo',
         is_default: true,
