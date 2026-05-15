@@ -1,15 +1,17 @@
-import { Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 
 export function Cacheable(ttl: number = 600) {
-  const cacheManagerInject = Inject(CACHE_MANAGER);
-
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {
-      const cacheManager = this[CACHE_MANAGER] as Cache;
+      const cacheManager = this.cacheManager as Cache;
+      
+      if (!cacheManager) {
+        // If cacheManager is not available, just call the original method
+        return originalMethod.apply(this, args);
+      }
       
       // Генерируем ключ кеша из названия метода и аргументов
       const cacheKey = `${propertyKey}:${JSON.stringify(args)}`;
@@ -34,7 +36,6 @@ export function Cacheable(ttl: number = 600) {
       return result;
     };
 
-    cacheManagerInject(target, propertyKey);
     return descriptor;
   };
 }

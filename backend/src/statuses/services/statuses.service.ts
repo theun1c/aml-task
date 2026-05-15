@@ -110,7 +110,7 @@ export class StatusesService {
           },
         });
 
-        if (dto.position! < 0 || dto.position! >= statuses.length) {
+        if (dto.position! < 1 || dto.position! > statuses.length) {
           throw new BadRequestException('Status position is out of range');
         }
 
@@ -118,7 +118,9 @@ export class StatusesService {
           .filter((status) => status.id !== statusId)
           .map((status) => status.id);
 
-        reorderedStatusIds.splice(dto.position!, 0, statusId);
+        // Convert from 1-based position to 0-based index for array manipulation
+        const arrayIndex = dto.position! - 1;
+        reorderedStatusIds.splice(arrayIndex, 0, statusId);
 
         const now = new Date();
         const offset = statuses.length;
@@ -142,7 +144,7 @@ export class StatusesService {
               id: reorderedStatusId,
             },
             data: {
-              position,
+              position: position + 1,
               updated_at: now,
               ...(reorderedStatusId === statusId ? this.buildStatusUpdateData(dto) : {}),
             },
@@ -250,7 +252,7 @@ export class StatusesService {
               id: status.id,
             },
             data: {
-              position,
+              position: position + 1,
               updated_at: now,
             },
           });

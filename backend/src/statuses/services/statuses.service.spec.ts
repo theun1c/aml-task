@@ -157,7 +157,7 @@ describe('StatusesService', () => {
 
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(result.name).toBe('Ready for Review');
-    expect(result.position).toBe(2);
+    expect(result.position).toBe(1);
     expect(getOrderedStatuses(statusesState).map((status) => status.id)).toEqual([
       'status-2',
       'status-1',

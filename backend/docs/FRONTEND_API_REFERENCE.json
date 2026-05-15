@@ -1,0 +1,581 @@
+{
+  "version": "1.0",
+  "description": "Quick API reference mapping user actions to API endpoints",
+  "generated_at": "2026-05-14",
+  "actions": [
+    {
+      "id": "auth_register",
+      "category": "Authentication",
+      "user_action": "User clicks 'Sign Up' and fills registration form",
+      "endpoint": "POST /auth/register",
+      "method": "POST",
+      "required_headers": {
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "email": "user@example.com",
+        "password": "SecurePass123",
+        "full_name": "John Doe"
+      },
+      "response_status": 201,
+      "on_success": [
+        "Save access_token to localStorage",
+        "Save refresh_token to secure cookie",
+        "Redirect to /dashboard",
+        "Load user profile"
+      ],
+      "on_error": {
+        "409": "Email already exists",
+        "400": "Validation error - check password strength"
+      }
+    },
+    {
+      "id": "auth_login",
+      "category": "Authentication",
+      "user_action": "User enters email and password on Login page",
+      "endpoint": "POST /auth/login",
+      "method": "POST",
+      "required_headers": {
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "email": "user@example.com",
+        "password": "SecurePass123"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Save access_token",
+        "Save refresh_token",
+        "Redirect to /dashboard"
+      ]
+    },
+    {
+      "id": "auth_refresh",
+      "category": "Authentication",
+      "user_action": "Access token expires or 401 received",
+      "endpoint": "POST /auth/refresh",
+      "method": "POST",
+      "required_headers": {
+        "Authorization": "Bearer {refresh_token}"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Update access_token",
+        "Retry original request"
+      ],
+      "on_error": {
+        "401": "Refresh token expired - redirect to login"
+      }
+    },
+    {
+      "id": "user_me",
+      "category": "Profile",
+      "user_action": "Page load or need current user info",
+      "endpoint": "GET /users/me",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Display user name in header",
+        "Show avatar in sidebar",
+        "Load initial user data"
+      ]
+    },
+    {
+      "id": "projects_list",
+      "category": "Projects",
+      "user_action": "User opens Projects list or Dashboard",
+      "endpoint": "GET /projects",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "query_params": {
+        "limit": 50,
+        "offset": 0
+      },
+      "response_status": 200,
+      "on_success": [
+        "Display projects in sidebar/list",
+        "Cache for 10 minutes",
+        "Show project counts"
+      ]
+    },
+    {
+      "id": "projects_create",
+      "category": "Projects",
+      "user_action": "User clicks 'New Project' and fills form",
+      "endpoint": "POST /projects",
+      "method": "POST",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "name": "E-Commerce Platform",
+        "project_key": "ECOM",
+        "description": "New platform for online sales"
+      },
+      "response_status": 201,
+      "on_success": [
+        "Auto-create 3 default statuses (To Do, In Progress, Done)",
+        "Redirect to project page",
+        "Show success notification",
+        "Update projects list"
+      ],
+      "note": "Default statuses are created automatically on server"
+    },
+    {
+      "id": "projects_get",
+      "category": "Projects",
+      "user_action": "User opens specific project page",
+      "endpoint": "GET /projects/{projectId}",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Display project info",
+        "Load and cache statuses",
+        "Show members list",
+        "Enable Kanban board",
+        "Cache for 10 minutes"
+      ]
+    },
+    {
+      "id": "sprints_list",
+      "category": "Sprints",
+      "user_action": "User opens Sprint planning page",
+      "endpoint": "GET /projects/{projectId}/sprints",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Show list of all sprints",
+        "Highlight active sprint",
+        "Display issue counts per sprint"
+      ]
+    },
+    {
+      "id": "sprints_create",
+      "category": "Sprints",
+      "user_action": "User clicks 'Create Sprint'",
+      "endpoint": "POST /projects/{projectId}/sprints",
+      "method": "POST",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "name": "Sprint 1 - May",
+        "goal": "Implement core features"
+      },
+      "response_status": 201,
+      "on_success": [
+        "Add new sprint to list",
+        "Make it editable/plannable",
+        "Show success notification"
+      ]
+    },
+    {
+      "id": "sprints_start",
+      "category": "Sprints",
+      "user_action": "User clicks 'Start Sprint' button",
+      "endpoint": "PATCH /projects/{projectId}/sprints/{sprintId}/start",
+      "method": "PATCH",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "preconditions": [
+        "Sprint must have at least 1 issue",
+        "Only 1 sprint can be active per project"
+      ],
+      "on_success": [
+        "Mark sprint as active",
+        "Load Kanban board",
+        "Load active sprint issues",
+        "Hide backlog view"
+      ]
+    },
+    {
+      "id": "sprints_complete",
+      "category": "Sprints",
+      "user_action": "User clicks 'Complete Sprint'",
+      "endpoint": "PATCH /projects/{projectId}/sprints/{sprintId}/complete",
+      "method": "PATCH",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "warning": "All unfinished issues will return to Backlog!",
+      "on_success": [
+        "Mark sprint as completed",
+        "Return unfinished issues to Backlog",
+        "Reload Backlog view",
+        "Show summary (e.g., '3 issues returned to Backlog')"
+      ]
+    },
+    {
+      "id": "statuses_list",
+      "category": "Statuses",
+      "user_action": "Load Kanban board or need column list",
+      "endpoint": "GET /projects/{projectId}/statuses",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Render Kanban columns",
+        "Display column names",
+        "Apply column colors"
+      ]
+    },
+    {
+      "id": "statuses_create",
+      "category": "Statuses",
+      "user_action": "Project owner clicks 'Add Column'",
+      "endpoint": "POST /projects/{projectId}/statuses",
+      "method": "POST",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "name": "Testing",
+        "category": "in_progress",
+        "color": "#F97316"
+      },
+      "response_status": 201,
+      "on_success": [
+        "Add new column to Kanban",
+        "Show in column header",
+        "Apply color"
+      ],
+      "note": "Only project owner can create columns"
+    },
+    {
+      "id": "issues_create",
+      "category": "Issues",
+      "user_action": "User clicks 'New Issue' in Backlog",
+      "endpoint": "POST /projects/{projectId}/issues",
+      "method": "POST",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "title": "Implement user authentication",
+        "description": "Add JWT-based auth system",
+        "type_code": "task",
+        "assignee_id": "user-456 (optional)"
+      },
+      "response_status": 201,
+      "on_success": [
+        "Add issue to Backlog",
+        "Assign issue number (#1, #2, etc)",
+        "Show success notification",
+        "Update issues list"
+      ]
+    },
+    {
+      "id": "issues_backlog_list",
+      "category": "Issues",
+      "user_action": "User opens Backlog tab",
+      "endpoint": "GET /projects/{projectId}/issues",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "query_params": {
+        "status_category": "backlog",
+        "limit": 100,
+        "offset": 0
+      },
+      "response_status": 200,
+      "on_success": [
+        "Display all backlog issues",
+        "Show in priority order",
+        "Enable drag-to-sprint functionality"
+      ]
+    },
+    {
+      "id": "issues_sprint_list",
+      "category": "Issues",
+      "user_action": "Load Kanban board for active sprint",
+      "endpoint": "GET /projects/{projectId}/sprints/active/issues",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Get all issues for active sprint",
+        "Get sprint's statuses (columns)",
+        "Render Kanban board"
+      ]
+    },
+    {
+      "id": "issues_move_CRITICAL",
+      "category": "Issues",
+      "user_action": "User drags issue between Kanban columns",
+      "endpoint": "PATCH /projects/{projectId}/issues/{issueId}/move",
+      "method": "PATCH",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "status_id": "status-2",
+        "rank_position": 1500
+      },
+      "rank_position_calculation": {
+        "description": "Calculate position between existing cards",
+        "example": "If card above = 1000, card below = 2000, new = 1500",
+        "if_at_end": "If moving to end, use last_position + 100"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Update card column visually",
+        "Change card status",
+        "Sync with server"
+      ],
+      "note": "THIS IS THE MOST IMPORTANT ENDPOINT FOR KANBAN!"
+    },
+    {
+      "id": "issues_update",
+      "category": "Issues",
+      "user_action": "User edits issue title/description/assignee",
+      "endpoint": "PATCH /projects/{projectId}/issues/{issueId}",
+      "method": "PATCH",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "title": "New title (optional)",
+        "description": "Updated description (optional)",
+        "assignee_id": "user-789 (optional)",
+        "type_code": "bug (optional)"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Update issue display",
+        "Sync assignee avatar",
+        "Update type icon"
+      ]
+    },
+    {
+      "id": "issues_add_to_sprint",
+      "category": "Issues",
+      "user_action": "User drags issue from Backlog to Sprint Planning",
+      "endpoint": "PATCH /projects/{projectId}/issues/{issueId}",
+      "method": "PATCH",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "sprint_id": "sprint-123"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Move issue from Backlog column to Sprint column",
+        "Update issue's sprint_id",
+        "Update sprint issue count"
+      ]
+    },
+    {
+      "id": "comments_add",
+      "category": "Comments",
+      "user_action": "User types comment and clicks Send",
+      "endpoint": "POST /projects/{projectId}/issues/{issueId}/comments",
+      "method": "POST",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "text": "This needs to be reviewed by QA team"
+      },
+      "response_status": 201,
+      "on_success": [
+        "Add comment to list",
+        "Show author avatar + name",
+        "Show timestamp",
+        "Clear input field"
+      ]
+    },
+    {
+      "id": "comments_list",
+      "category": "Comments",
+      "user_action": "User opens issue details modal",
+      "endpoint": "GET /projects/{projectId}/issues/{issueId}/comments",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Display all comments for issue",
+        "Show newest first",
+        "Display author info for each"
+      ]
+    },
+    {
+      "id": "members_add",
+      "category": "Members",
+      "user_action": "Project owner clicks 'Add Member'",
+      "endpoint": "POST /projects/{projectId}/members",
+      "method": "POST",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json"
+      },
+      "request_body": {
+        "user_id": "user-456",
+        "role": "member"
+      },
+      "roles": [
+        "owner - full access",
+        "member - limited access"
+      ],
+      "response_status": 201,
+      "on_success": [
+        "Add member to project",
+        "Show in members list",
+        "Member can now see project"
+      ],
+      "note": "Only project owner can add members"
+    },
+    {
+      "id": "members_list",
+      "category": "Members",
+      "user_action": "User opens Project Settings → Members",
+      "endpoint": "GET /projects/{projectId}/members",
+      "method": "GET",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "on_success": [
+        "Display all project members",
+        "Show member roles",
+        "Show join dates"
+      ]
+    },
+    {
+      "id": "project_archive",
+      "category": "Projects",
+      "user_action": "Project owner clicks 'Archive Project'",
+      "endpoint": "PATCH /projects/{projectId}/archive",
+      "method": "PATCH",
+      "required_headers": {
+        "Authorization": "Bearer {access_token}"
+      },
+      "response_status": 200,
+      "warning": "Archived project becomes READ-ONLY! All mutations will return 409 Conflict",
+      "on_success": [
+        "Mark project as archived",
+        "Disable all edit buttons",
+        "Show 'Archived' badge",
+        "Show warning message"
+      ]
+    }
+  ],
+  "endpoints_by_category": {
+    "authentication": [
+      "auth_register",
+      "auth_login",
+      "auth_refresh"
+    ],
+    "profile": [
+      "user_me"
+    ],
+    "projects": [
+      "projects_create",
+      "projects_list",
+      "projects_get",
+      "project_archive"
+    ],
+    "sprints": [
+      "sprints_create",
+      "sprints_list",
+      "sprints_start",
+      "sprints_complete"
+    ],
+    "statuses": [
+      "statuses_create",
+      "statuses_list"
+    ],
+    "issues": [
+      "issues_create",
+      "issues_backlog_list",
+      "issues_sprint_list",
+      "issues_move_CRITICAL",
+      "issues_update",
+      "issues_add_to_sprint"
+    ],
+    "comments": [
+      "comments_add",
+      "comments_list"
+    ],
+    "members": [
+      "members_add",
+      "members_list"
+    ]
+  },
+  "critical_flows": {
+    "load_project": [
+      "GET /users/me",
+      "GET /projects",
+      "GET /projects/{projectId}",
+      "GET /projects/{projectId}/statuses"
+    ],
+    "view_kanban": [
+      "GET /projects/{projectId}/sprints/active/issues",
+      "GET /projects/{projectId}/statuses"
+    ],
+    "drag_drop_card": [
+      "PATCH /projects/{projectId}/issues/{issueId}/move"
+    ],
+    "create_project": [
+      "POST /projects"
+    ],
+    "plan_sprint": [
+      "GET /projects/{projectId}/sprints",
+      "GET /projects/{projectId}/issues?status_category=backlog",
+      "PATCH /projects/{projectId}/issues/{issueId} (set sprint_id)"
+    ],
+    "start_sprint": [
+      "PATCH /projects/{projectId}/sprints/{sprintId}/start"
+    ],
+    "complete_sprint": [
+      "PATCH /projects/{projectId}/sprints/{sprintId}/complete"
+    ]
+  },
+  "common_errors": {
+    "401": {
+      "cause": "Access token expired or invalid",
+      "solution": "Call POST /auth/refresh to get new token"
+    },
+    "403": {
+      "cause": "User doesn't have permission",
+      "solution": "Check if user is project member or owner"
+    },
+    "409": {
+      "cause": "Project is archived or business rule violated",
+      "solution": "Show user that project is read-only"
+    },
+    "400": {
+      "cause": "Validation error",
+      "solution": "Check error message and fix request body"
+    }
+  }
+}

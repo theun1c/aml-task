@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { ProjectsService } from './projects.service';
 
@@ -14,6 +15,11 @@ describe('ProjectsService', () => {
       findFirst: jest.Mock;
     };
   };
+  let cacheManager: {
+    get: jest.Mock;
+    set: jest.Mock;
+    del: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -27,12 +33,22 @@ describe('ProjectsService', () => {
       },
     };
 
+    cacheManager = {
+      get: jest.fn(),
+      set: jest.fn(),
+      del: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProjectsService,
         {
           provide: PrismaService,
           useValue: prisma,
+        },
+        {
+          provide: CACHE_MANAGER,
+          useValue: cacheManager,
         },
       ],
     }).compile();
