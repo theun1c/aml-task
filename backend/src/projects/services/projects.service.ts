@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import type { Cache } from 'cache-manager';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { Cacheable } from '../../infrastructure/cache/cache.decorator';
 import { CreateProjectDto } from '../dto/create-project.dto';
