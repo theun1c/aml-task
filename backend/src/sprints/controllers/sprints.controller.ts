@@ -75,6 +75,19 @@ export class SprintsController {
     return this.sprintsService.findAll(projectId, this.getUserId(user));
   }
 
+  @Get('active')
+  @ApiOperation({ summary: 'Get active project sprint' })
+  @ApiOkResponse({ type: SprintResponse })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'User is not a project member' })
+  @ApiNotFoundResponse({ description: 'Project not found' })
+  async findActive(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('project_id', ParseUUIDPipe) projectId: string,
+  ): Promise<SprintResponse | null> {
+    return this.sprintsService.findActive(projectId, this.getUserId(user));
+  }
+
   @Get(':sprint_id')
   @ApiOperation({ summary: 'Get project sprint by id' })
   @ApiOkResponse({ type: SprintResponse })
@@ -87,19 +100,6 @@ export class SprintsController {
     @Param('sprint_id', ParseUUIDPipe) sprintId: string,
   ): Promise<SprintResponse> {
     return this.sprintsService.findById(projectId, sprintId, this.getUserId(user));
-  }
-
-  @Get('active')
-  @ApiOperation({ summary: 'Get active project sprint' })
-  @ApiOkResponse({ type: SprintResponse })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  @ApiForbiddenResponse({ description: 'User is not a project member' })
-  @ApiNotFoundResponse({ description: 'Project not found' })
-  async findActive(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('project_id', ParseUUIDPipe) projectId: string,
-  ): Promise<SprintResponse | null> {
-    return this.sprintsService.findActive(projectId, this.getUserId(user));
   }
 
   @Patch(':sprint_id')

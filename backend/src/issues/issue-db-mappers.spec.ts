@@ -12,15 +12,18 @@ const decimal = (value: number) => ({
 });
 
 describe('issue-db-mappers', () => {
-  it('mapDbIssueTypeCodeToApiType() should keep supported MVP type codes', () => {
+  it('mapDbIssueTypeCodeToApiType() should keep supported DB type codes', () => {
     expect(mapDbIssueTypeCodeToApiType('task')).toBe('task');
     expect(mapDbIssueTypeCodeToApiType('bug')).toBe('bug');
+    expect(mapDbIssueTypeCodeToApiType('story')).toBe('story');
+    expect(mapDbIssueTypeCodeToApiType('epic')).toBe('epic');
+    expect(mapDbIssueTypeCodeToApiType('subtask')).toBe('subtask');
   });
 
-  it('mapDbIssueTypeCodeToApiType() should throw ConflictException for unsupported DB type code', () => {
-    expect(() => mapDbIssueTypeCodeToApiType('story')).toThrow(ConflictException);
-    expect(() => mapDbIssueTypeCodeToApiType('story')).toThrow(
-      'Issue type "story" is not supported by API',
+  it('mapDbIssueTypeCodeToApiType() should throw ConflictException for unknown DB type code', () => {
+    expect(() => mapDbIssueTypeCodeToApiType('unknown')).toThrow(ConflictException);
+    expect(() => mapDbIssueTypeCodeToApiType('unknown')).toThrow(
+      'Issue type "unknown" is not supported by API',
     );
   });
 

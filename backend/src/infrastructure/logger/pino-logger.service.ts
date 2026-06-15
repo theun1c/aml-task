@@ -6,25 +6,20 @@ export class PinoLoggerService {
   private logger: pino.Logger;
 
   constructor() {
-    const pinoInstance = pino(
-      {
-        level: process.env.LOG_LEVEL || 'info',
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? {
-                target: 'pino-pretty',
-                options: {
-                  colorize: true,
-                  translateTime: 'SYS:standard',
-                  ignore: 'pid,hostname',
-                },
-              }
-            : undefined,
-      },
-      process.env.NODE_ENV === 'production'
-        ? pino.destination('/var/log/aml-backend.log')
-        : pino.destination(),
-    );
+    const pinoInstance = pino({
+      level: process.env.LOG_LEVEL || 'info',
+      transport:
+        process.env.NODE_ENV !== 'production'
+          ? {
+              target: 'pino-pretty',
+              options: {
+                colorize: true,
+                translateTime: 'SYS:standard',
+                ignore: 'pid,hostname',
+              },
+            }
+          : undefined,
+    });
     this.logger = pinoInstance;
   }
 

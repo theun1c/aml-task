@@ -1,6 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-
-type IssueApiType = 'task' | 'bug';
+import { ISSUE_TYPE_VALUES, type IssueTypeValue } from './issue-type';
 
 type DecimalLike = {
   toNumber?: () => number;
@@ -28,9 +27,9 @@ type IssueRecordForResponse = {
   issue_types: IssueTypeRecord;
 };
 
-export function mapDbIssueTypeCodeToApiType(code: string): IssueApiType {
-  if (code === 'task' || code === 'bug') {
-    return code;
+export function mapDbIssueTypeCodeToApiType(code: string): IssueTypeValue {
+  if ((ISSUE_TYPE_VALUES as readonly string[]).includes(code)) {
+    return code as IssueTypeValue;
   }
 
   throw new ConflictException(`Issue type "${code}" is not supported by API`);
