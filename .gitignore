@@ -9,6 +9,8 @@
 .env 
 .env.prod
 .env.development
+.env.dev
+.env.local
 
 # ide
 .vscode/

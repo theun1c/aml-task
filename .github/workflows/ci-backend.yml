@@ -5,7 +5,11 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - "script_db.txt"
+      - "docker-compose.yaml"
       - "docker-compose.prod.yaml"
+      - ".env.example"
+      - ".env.prod.example"
       - ".github/workflows/ci-backend.yml"
       - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
@@ -13,6 +17,10 @@ on:
 jobs:
   ci-and-push:
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_BACKEND_REPO: ${{ secrets.DOCKERHUB_BACKEND_REPO }}
 
     permissions:
       contents: read
@@ -45,16 +53,26 @@ jobs:
         run: npm test -- --passWithNoTests
 
       - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' && env.DOCKERHUB_BACKEND_REPO != '' }}
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Build and push backend image
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' && env.DOCKERHUB_BACKEND_REPO != '' }}
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_BACKEND_REPO }}:latest
-            ${{ secrets.DOCKERHUB_BACKEND_REPO }}:sha-${{ github.sha }}
+            ${{ env.DOCKERHUB_BACKEND_REPO }}:latest
+            ${{ env.DOCKERHUB_BACKEND_REPO }}:sha-${{ github.sha }}
+
+      - name: Build backend image without push
+        if: ${{ env.DOCKERHUB_USERNAME == '' || env.DOCKERHUB_TOKEN == '' || env.DOCKERHUB_BACKEND_REPO == '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          tags: aml-task-backend:ci

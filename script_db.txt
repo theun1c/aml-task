@@ -1,0 +1,2387 @@
+BEGIN;
+
+-- EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS citext;
+
+-- SCHEMA
+CREATE SCHEMA IF NOT EXISTS aml_task;
+
+-- USERS
+CREATE TABLE aml_task.users (
+                                id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                email               citext NOT NULL UNIQUE,
+                                password_hash       text NOT NULL,
+                                full_name           varchar(200) NOT NULL,
+                                avatar_url          text,
+                                settings            jsonb NOT NULL DEFAULT '{}'::jsonb,
+                                is_active           boolean NOT NULL DEFAULT true,
+                                last_login_at       timestamptz,
+                                row_version         bigint NOT NULL DEFAULT 1,
+                                created_at          timestamptz NOT NULL DEFAULT now(),
+                                updated_at          timestamptz NOT NULL DEFAULT now(),
+                                deleted_at          timestamptz,
+
+                                CONSTRAINT chk_users_email_not_blank
+                                    CHECK (btrim(email::text) <> ''),
+                                CONSTRAINT chk_users_full_name_not_blank
+                                    CHECK (btrim(full_name) <> ''),
+                                CONSTRAINT chk_users_settings_is_object
+                                    CHECK (jsonb_typeof(settings) = 'object'),
+                                CONSTRAINT chk_users_row_version_positive
+                                    CHECK (row_version > 0)
+);
+
+ALTER TABLE aml_task.users
+    ADD COLUMN first_name varchar(100),
+    ADD COLUMN last_name varchar(100);
+
+
+
+CREATE OR REPLACE FUNCTION aml_task.fn_set_user_full_name()
+    RETURNS trigger
+    LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NULLIF(btrim(COALESCE(NEW.first_name, '')), '') IS NOT NULL
+        OR NULLIF(btrim(COALESCE(NEW.last_name, '')), '') IS NOT NULL THEN
+        NEW.full_name := btrim(
+                concat_ws(
+                        ' ',
+                        NULLIF(btrim(NEW.last_name), ''),
+                        NULLIF(btrim(NEW.first_name), '')
+                )
+                         );
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_users_set_full_name ON aml_task.users;
+
+CREATE TRIGGER trg_users_set_full_name
+    BEFORE INSERT OR UPDATE OF first_name, last_name
+    ON aml_task.users
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_set_user_full_name();
+
+UPDATE aml_task.users
+SET full_name = btrim(
+        concat_ws(
+                ' ',
+                NULLIF(btrim(last_name), ''),
+                NULLIF(btrim(first_name), '')
+        )
+                )
+WHERE first_name IS NOT NULL
+   OR last_name IS NOT NULL;
+
+-- USER SESSIONS
+-- JWT / refresh token sessions
+CREATE TABLE aml_task.user_sessions (
+                                        id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                        user_id             uuid NOT NULL,
+                                        refresh_token_hash  text NOT NULL,
+                                        device_info         text,
+                                        ip_address          inet,
+                                        user_agent          text,
+                                        is_revoked          boolean NOT NULL DEFAULT false,
+                                        revoked_at          timestamptz,
+                                        expires_at          timestamptz NOT NULL,
+                                        last_used_at        timestamptz,
+                                        created_at          timestamptz NOT NULL DEFAULT now(),
+                                        updated_at          timestamptz NOT NULL DEFAULT now(),
+
+                                        CONSTRAINT fk_user_sessions_user
+                                            FOREIGN KEY (user_id)
+                                                REFERENCES aml_task.users(id)
+                                                ON UPDATE RESTRICT
+                                                ON DELETE CASCADE,
+
+                                        CONSTRAINT uq_user_sessions_refresh_token_hash
+                                            UNIQUE (refresh_token_hash),
+
+                                        CONSTRAINT chk_user_sessions_expiry
+                                            CHECK (expires_at > created_at),
+
+                                        CONSTRAINT chk_user_sessions_revoked_state
+                                            CHECK (
+                                                (is_revoked = false AND revoked_at IS NULL)
+                                                    OR
+                                                (is_revoked = true AND revoked_at IS NOT NULL)
+                                                )
+);
+
+
+-- PROJECTS
+CREATE TABLE aml_task.projects (
+                                   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                   name                varchar(200) NOT NULL,
+                                   project_key         varchar(20) NOT NULL,
+                                   description         text,
+                                   owner_id            uuid NOT NULL,
+                                   is_archived         boolean NOT NULL DEFAULT false,
+                                   row_version         bigint NOT NULL DEFAULT 1,
+                                   created_at          timestamptz NOT NULL DEFAULT now(),
+                                   updated_at          timestamptz NOT NULL DEFAULT now(),
+                                   deleted_at          timestamptz,
+
+                                   CONSTRAINT uq_projects_name UNIQUE (name),
+                                   CONSTRAINT uq_projects_project_key UNIQUE (project_key),
+
+                                   CONSTRAINT fk_projects_owner
+                                       FOREIGN KEY (owner_id)
+                                           REFERENCES aml_task.users(id)
+                                           ON UPDATE RESTRICT
+                                           ON DELETE RESTRICT,
+
+                                   CONSTRAINT chk_projects_name_not_blank
+                                       CHECK (btrim(name) <> ''),
+                                   CONSTRAINT chk_projects_key_format
+                                       CHECK (project_key ~ '^[A-Z][A-Z0-9_]{1,19}$'),
+                                   CONSTRAINT chk_projects_row_version_positive
+                                       CHECK (row_version > 0)
+);
+
+-- PROJECT MEMBERS
+CREATE TABLE aml_task.project_members (
+                                          id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                          project_id          uuid NOT NULL,
+                                          user_id             uuid NOT NULL,
+                                          role                varchar(20) NOT NULL,
+                                          is_active           boolean NOT NULL DEFAULT true,
+                                          joined_at           timestamptz NOT NULL DEFAULT now(),
+                                          left_at             timestamptz,
+                                          created_at          timestamptz NOT NULL DEFAULT now(),
+
+                                          CONSTRAINT fk_project_members_project
+                                              FOREIGN KEY (project_id)
+                                                  REFERENCES aml_task.projects(id)
+                                                  ON UPDATE RESTRICT
+                                                  ON DELETE CASCADE,
+
+                                          CONSTRAINT fk_project_members_user
+                                              FOREIGN KEY (user_id)
+                                                  REFERENCES aml_task.users(id)
+                                                  ON UPDATE RESTRICT
+                                                  ON DELETE CASCADE,
+
+                                          CONSTRAINT uq_project_members_project_user
+                                              UNIQUE (project_id, user_id),
+
+                                          CONSTRAINT chk_project_members_role
+                                              CHECK (role IN ('owner', 'admin', 'member', 'viewer')),
+
+                                          CONSTRAINT chk_project_members_left_after_join
+                                              CHECK (left_at IS NULL OR left_at >= joined_at)
+);
+
+
+-- PROJECT INVITATIONS
+CREATE TABLE aml_task.project_invitations (
+                                              id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                              project_id          uuid NOT NULL,
+                                              email               citext NOT NULL,
+                                              invited_by          uuid NOT NULL,
+                                              role                varchar(20) NOT NULL DEFAULT 'member',
+                                              token               uuid NOT NULL DEFAULT gen_random_uuid(),
+                                              status              varchar(20) NOT NULL DEFAULT 'pending',
+                                              expires_at          timestamptz NOT NULL,
+                                              accepted_at         timestamptz,
+                                              created_at          timestamptz NOT NULL DEFAULT now(),
+
+                                              CONSTRAINT fk_project_invitations_project
+                                                  FOREIGN KEY (project_id)
+                                                      REFERENCES aml_task.projects(id)
+                                                      ON UPDATE RESTRICT
+                                                      ON DELETE CASCADE,
+
+                                              CONSTRAINT fk_project_invitations_invited_by
+                                                  FOREIGN KEY (invited_by)
+                                                      REFERENCES aml_task.users(id)
+                                                      ON UPDATE RESTRICT
+                                                      ON DELETE RESTRICT,
+
+                                              CONSTRAINT uq_project_invitations_token
+                                                  UNIQUE (token),
+
+                                              CONSTRAINT uq_project_invitations_project_email
+                                                  UNIQUE (project_id, email),
+
+                                              CONSTRAINT chk_project_invitations_email_not_blank
+                                                  CHECK (btrim(email::text) <> ''),
+
+                                              CONSTRAINT chk_project_invitations_role
+                                                  CHECK (role IN ('admin', 'member', 'viewer')),
+
+                                              CONSTRAINT chk_project_invitations_status
+                                                  CHECK (status IN ('pending', 'accepted', 'declined', 'expired', 'revoked')),
+
+                                              CONSTRAINT chk_project_invitations_expiry
+                                                  CHECK (expires_at > created_at),
+
+                                              CONSTRAINT chk_project_invitations_accepted_at
+                                                  CHECK (
+                                                      accepted_at IS NULL
+                                                          OR status = 'accepted'
+                                                      )
+);
+
+
+-- ISSUE TYPES
+CREATE TABLE aml_task.issue_types (
+                                      id                  smallint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                                      code                varchar(30) NOT NULL UNIQUE,
+                                      name                varchar(100) NOT NULL UNIQUE,
+                                      description         text,
+                                      icon                varchar(100),
+                                      is_subtask_allowed  boolean NOT NULL DEFAULT true,
+
+                                      CONSTRAINT chk_issue_types_code_format
+                                          CHECK (code ~ '^[a-z][a-z0-9_]{1,29}$'),
+                                      CONSTRAINT chk_issue_types_name_not_blank
+                                          CHECK (btrim(name) <> '')
+);
+
+-- STATUSES
+CREATE TABLE aml_task.statuses (
+                                   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                   project_id          uuid NOT NULL,
+                                   name                varchar(100) NOT NULL,
+                                   category            varchar(20) NOT NULL,
+                                   position            integer NOT NULL,
+                                   color               varchar(20),
+                                   is_default          boolean NOT NULL DEFAULT false,
+                                   is_final            boolean NOT NULL DEFAULT false,
+                                   row_version         bigint NOT NULL DEFAULT 1,
+                                   created_at          timestamptz NOT NULL DEFAULT now(),
+                                   updated_at          timestamptz NOT NULL DEFAULT now(),
+
+                                   CONSTRAINT fk_statuses_project
+                                       FOREIGN KEY (project_id)
+                                           REFERENCES aml_task.projects(id)
+                                           ON UPDATE RESTRICT
+                                           ON DELETE CASCADE,
+
+                                   CONSTRAINT uq_statuses_project_name
+                                       UNIQUE (project_id, name),
+
+                                   CONSTRAINT uq_statuses_project_position
+                                       UNIQUE (project_id, position),
+
+                                   CONSTRAINT chk_statuses_category
+                                       CHECK (category IN ('todo', 'in_progress', 'done')),
+
+                                   CONSTRAINT chk_statuses_position_positive
+                                       CHECK (position > 0),
+
+                                   CONSTRAINT chk_statuses_row_version_positive
+                                       CHECK (row_version > 0)
+);
+
+
+-- SPRINTS
+CREATE TABLE aml_task.sprints (
+                                  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                  project_id          uuid NOT NULL,
+                                  name                varchar(150) NOT NULL,
+                                  goal                text,
+                                  status              varchar(20) NOT NULL DEFAULT 'planned',
+                                  start_date          date,
+                                  end_date            date,
+                                  completed_at        timestamptz,
+                                  row_version         bigint NOT NULL DEFAULT 1,
+                                  created_at          timestamptz NOT NULL DEFAULT now(),
+                                  updated_at          timestamptz NOT NULL DEFAULT now(),
+
+                                  CONSTRAINT fk_sprints_project
+                                      FOREIGN KEY (project_id)
+                                          REFERENCES aml_task.projects(id)
+                                          ON UPDATE RESTRICT
+                                          ON DELETE CASCADE,
+
+                                  CONSTRAINT uq_sprints_project_name
+                                      UNIQUE (project_id, name),
+
+                                  CONSTRAINT chk_sprints_status
+                                      CHECK (status IN ('planned', 'active', 'completed', 'cancelled')),
+
+                                  CONSTRAINT chk_sprints_dates
+                                      CHECK (
+                                          start_date IS NULL
+                                              OR end_date IS NULL
+                                              OR start_date <= end_date
+                                          ),
+
+                                  CONSTRAINT chk_sprints_completed_at
+                                      CHECK (
+                                          completed_at IS NULL
+                                              OR status IN ('completed', 'cancelled')
+                                          ),
+
+                                  CONSTRAINT chk_sprints_row_version_positive
+                                      CHECK (row_version > 0)
+);
+
+
+-- ISSUES
+CREATE TABLE aml_task.issues (
+                                 id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                 project_id                  uuid NOT NULL,
+                                 issue_number                bigint NOT NULL,
+                                 type_id                     smallint NOT NULL,
+                                 status_id                   uuid NOT NULL,
+                                 sprint_id                   uuid,
+                                 parent_issue_id             uuid,
+                                 title                       varchar(500) NOT NULL,
+                                 description                 text,
+                                 reporter_id                 uuid NOT NULL,
+                                 assignee_id                 uuid,
+                                 priority                    varchar(20) NOT NULL DEFAULT 'medium',
+                                 story_points                numeric(5,2),
+                                 due_date                    date,
+                                 rank_position               numeric(20,10),
+                                 original_estimate_minutes   integer,
+                                 remaining_estimate_minutes  integer,
+                                 row_version                 bigint NOT NULL DEFAULT 1,
+                                 created_at                  timestamptz NOT NULL DEFAULT now(),
+                                 updated_at                  timestamptz NOT NULL DEFAULT now(),
+                                 deleted_at                  timestamptz,
+
+                                 CONSTRAINT fk_issues_project
+                                     FOREIGN KEY (project_id)
+                                         REFERENCES aml_task.projects(id)
+                                         ON UPDATE RESTRICT
+                                         ON DELETE CASCADE,
+
+                                 CONSTRAINT fk_issues_type
+                                     FOREIGN KEY (type_id)
+                                         REFERENCES aml_task.issue_types(id)
+                                         ON UPDATE RESTRICT
+                                         ON DELETE RESTRICT,
+
+                                 CONSTRAINT fk_issues_status
+                                     FOREIGN KEY (status_id)
+                                         REFERENCES aml_task.statuses(id)
+                                         ON UPDATE RESTRICT
+                                         ON DELETE RESTRICT,
+
+                                 CONSTRAINT fk_issues_sprint
+                                     FOREIGN KEY (sprint_id)
+                                         REFERENCES aml_task.sprints(id)
+                                         ON UPDATE RESTRICT
+                                         ON DELETE SET NULL,
+
+                                 CONSTRAINT fk_issues_parent
+                                     FOREIGN KEY (parent_issue_id)
+                                         REFERENCES aml_task.issues(id)
+                                         ON UPDATE RESTRICT
+                                         ON DELETE RESTRICT,
+
+                                 CONSTRAINT fk_issues_reporter
+                                     FOREIGN KEY (reporter_id)
+                                         REFERENCES aml_task.users(id)
+                                         ON UPDATE RESTRICT
+                                         ON DELETE RESTRICT,
+
+                                 CONSTRAINT fk_issues_assignee
+                                     FOREIGN KEY (assignee_id)
+                                         REFERENCES aml_task.users(id)
+                                         ON UPDATE RESTRICT
+                                         ON DELETE SET NULL,
+
+                                 CONSTRAINT uq_issues_project_issue_number
+                                     UNIQUE (project_id, issue_number),
+
+                                 CONSTRAINT chk_issues_number_positive
+                                     CHECK (issue_number > 0),
+
+                                 CONSTRAINT chk_issues_title_not_blank
+                                     CHECK (btrim(title) <> ''),
+
+                                 CONSTRAINT chk_issues_priority
+                                     CHECK (priority IN ('lowest', 'low', 'medium', 'high', 'highest', 'critical')),
+
+                                 CONSTRAINT chk_issues_story_points_nonnegative
+                                     CHECK (story_points IS NULL OR story_points >= 0),
+
+                                 CONSTRAINT chk_issues_estimates_nonnegative
+                                     CHECK (
+                                         (original_estimate_minutes IS NULL OR original_estimate_minutes >= 0)
+                                             AND
+                                         (remaining_estimate_minutes IS NULL OR remaining_estimate_minutes >= 0)
+                                         ),
+
+                                 CONSTRAINT chk_issues_parent_not_self
+                                     CHECK (parent_issue_id IS NULL OR parent_issue_id <> id),
+
+                                 CONSTRAINT chk_issues_row_version_positive
+                                     CHECK (row_version > 0)
+);
+
+-- ISSUE WATCHERS
+CREATE TABLE aml_task.issue_watchers (
+                                         issue_id             uuid NOT NULL,
+                                         user_id              uuid NOT NULL,
+                                         created_at           timestamptz NOT NULL DEFAULT now(),
+
+                                         CONSTRAINT pk_issue_watchers
+                                             PRIMARY KEY (issue_id, user_id),
+
+                                         CONSTRAINT fk_issue_watchers_issue
+                                             FOREIGN KEY (issue_id)
+                                                 REFERENCES aml_task.issues(id)
+                                                 ON UPDATE RESTRICT
+                                                 ON DELETE CASCADE,
+
+                                         CONSTRAINT fk_issue_watchers_user
+                                             FOREIGN KEY (user_id)
+                                                 REFERENCES aml_task.users(id)
+                                                 ON UPDATE RESTRICT
+                                                 ON DELETE CASCADE
+);
+
+
+-- ISSUE STATUS HISTORY
+CREATE TABLE aml_task.issue_status_history (
+                                               id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                               issue_id            uuid NOT NULL,
+                                               from_status_id      uuid,
+                                               to_status_id        uuid NOT NULL,
+                                               changed_by          uuid NOT NULL,
+                                               entered_at          timestamptz NOT NULL DEFAULT now(),
+                                               left_at             timestamptz,
+                                               comment             text,
+
+                                               CONSTRAINT fk_issue_status_history_issue
+                                                   FOREIGN KEY (issue_id)
+                                                       REFERENCES aml_task.issues(id)
+                                                       ON UPDATE RESTRICT
+                                                       ON DELETE CASCADE,
+
+                                               CONSTRAINT fk_issue_status_history_from_status
+                                                   FOREIGN KEY (from_status_id)
+                                                       REFERENCES aml_task.statuses(id)
+                                                       ON UPDATE RESTRICT
+                                                       ON DELETE RESTRICT,
+
+                                               CONSTRAINT fk_issue_status_history_to_status
+                                                   FOREIGN KEY (to_status_id)
+                                                       REFERENCES aml_task.statuses(id)
+                                                       ON UPDATE RESTRICT
+                                                       ON DELETE RESTRICT,
+
+                                               CONSTRAINT fk_issue_status_history_changed_by
+                                                   FOREIGN KEY (changed_by)
+                                                       REFERENCES aml_task.users(id)
+                                                       ON UPDATE RESTRICT
+                                                       ON DELETE RESTRICT,
+
+                                               CONSTRAINT chk_issue_status_history_range
+                                                   CHECK (left_at IS NULL OR left_at >= entered_at),
+
+                                               CONSTRAINT chk_issue_status_history_diff_status
+                                                   CHECK (from_status_id IS NULL OR from_status_id <> to_status_id)
+);
+
+
+-- ISSUE RELATIONS
+CREATE TABLE aml_task.issue_relations (
+                                          id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                          source_issue_id     uuid NOT NULL,
+                                          target_issue_id     uuid NOT NULL,
+                                          relation_type       varchar(30) NOT NULL,
+                                          created_by          uuid NOT NULL,
+                                          created_at          timestamptz NOT NULL DEFAULT now(),
+
+                                          CONSTRAINT fk_issue_relations_source
+                                              FOREIGN KEY (source_issue_id)
+                                                  REFERENCES aml_task.issues(id)
+                                                  ON UPDATE RESTRICT
+                                                  ON DELETE CASCADE,
+
+                                          CONSTRAINT fk_issue_relations_target
+                                              FOREIGN KEY (target_issue_id)
+                                                  REFERENCES aml_task.issues(id)
+                                                  ON UPDATE RESTRICT
+                                                  ON DELETE CASCADE,
+
+                                          CONSTRAINT fk_issue_relations_created_by
+                                              FOREIGN KEY (created_by)
+                                                  REFERENCES aml_task.users(id)
+                                                  ON UPDATE RESTRICT
+                                                  ON DELETE RESTRICT,
+
+                                          CONSTRAINT uq_issue_relations_pair_type
+                                              UNIQUE (source_issue_id, target_issue_id, relation_type),
+
+                                          CONSTRAINT chk_issue_relations_no_self
+                                              CHECK (source_issue_id <> target_issue_id),
+
+                                          CONSTRAINT chk_issue_relations_type
+                                              CHECK (
+                                                  relation_type IN (
+                                                                    'blocks',
+                                                                    'is_blocked_by',
+                                                                    'relates_to',
+                                                                    'duplicates',
+                                                                    'is_duplicated_by',
+                                                                    'depends_on',
+                                                                    'is_dependency_for',
+                                                                    'clones',
+                                                                    'is_cloned_by'
+                                                      )
+                                                  )
+);
+
+
+-- COMMENTS
+CREATE TABLE aml_task.comments (
+                                   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                   issue_id            uuid NOT NULL,
+                                   author_id           uuid NOT NULL,
+                                   content             text NOT NULL,
+                                   row_version         bigint NOT NULL DEFAULT 1,
+                                   created_at          timestamptz NOT NULL DEFAULT now(),
+                                   updated_at          timestamptz NOT NULL DEFAULT now(),
+                                   deleted_at          timestamptz,
+
+                                   CONSTRAINT fk_comments_issue
+                                       FOREIGN KEY (issue_id)
+                                           REFERENCES aml_task.issues(id)
+                                           ON UPDATE RESTRICT
+                                           ON DELETE CASCADE,
+
+                                   CONSTRAINT fk_comments_author
+                                       FOREIGN KEY (author_id)
+                                           REFERENCES aml_task.users(id)
+                                           ON UPDATE RESTRICT
+                                           ON DELETE RESTRICT,
+
+                                   CONSTRAINT chk_comments_content_not_blank
+                                       CHECK (btrim(content) <> ''),
+
+                                   CONSTRAINT chk_comments_row_version_positive
+                                       CHECK (row_version > 0)
+);
+
+
+-- ATTACHMENTS
+CREATE TABLE aml_task.attachments (
+                                      id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                      issue_id            uuid NOT NULL,
+                                      uploaded_by         uuid NOT NULL,
+                                      file_name           varchar(255) NOT NULL,
+                                      file_url            text NOT NULL,
+                                      mime_type           varchar(150),
+                                      file_size_bytes     bigint NOT NULL,
+                                      checksum_sha256     char(64),
+                                      created_at          timestamptz NOT NULL DEFAULT now(),
+
+                                      CONSTRAINT fk_attachments_issue
+                                          FOREIGN KEY (issue_id)
+                                              REFERENCES aml_task.issues(id)
+                                              ON UPDATE RESTRICT
+                                              ON DELETE CASCADE,
+
+                                      CONSTRAINT fk_attachments_uploaded_by
+                                          FOREIGN KEY (uploaded_by)
+                                              REFERENCES aml_task.users(id)
+                                              ON UPDATE RESTRICT
+                                              ON DELETE RESTRICT,
+
+                                      CONSTRAINT chk_attachments_file_name_not_blank
+                                          CHECK (btrim(file_name) <> ''),
+
+                                      CONSTRAINT chk_attachments_file_url_not_blank
+                                          CHECK (btrim(file_url) <> ''),
+
+                                      CONSTRAINT chk_attachments_file_size_positive
+                                          CHECK (file_size_bytes > 0),
+
+                                      CONSTRAINT chk_attachments_checksum_format
+                                          CHECK (
+                                              checksum_sha256 IS NULL
+                                                  OR checksum_sha256 ~ '^[0-9a-fA-F]{64}$'
+                                              )
+);
+
+
+-- TIME LOGS
+CREATE TABLE aml_task.time_logs (
+                                    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                    issue_id            uuid NOT NULL,
+                                    user_id             uuid NOT NULL,
+                                    work_date           date NOT NULL DEFAULT CURRENT_DATE,
+                                    time_spent_minutes  integer NOT NULL,
+                                    description         text,
+                                    created_at          timestamptz NOT NULL DEFAULT now(),
+
+                                    CONSTRAINT fk_time_logs_issue
+                                        FOREIGN KEY (issue_id)
+                                            REFERENCES aml_task.issues(id)
+                                            ON UPDATE RESTRICT
+                                            ON DELETE CASCADE,
+
+                                    CONSTRAINT fk_time_logs_user
+                                        FOREIGN KEY (user_id)
+                                            REFERENCES aml_task.users(id)
+                                            ON UPDATE RESTRICT
+                                            ON DELETE RESTRICT,
+
+                                    CONSTRAINT chk_time_logs_spent_positive
+                                        CHECK (time_spent_minutes > 0)
+);
+
+
+-- NOTIFICATIONS
+CREATE TABLE aml_task.notifications (
+                                        id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                        user_id             uuid NOT NULL,
+                                        notification_type   varchar(50) NOT NULL,
+                                        title               varchar(200) NOT NULL,
+                                        payload             jsonb NOT NULL DEFAULT '{}'::jsonb,
+                                        is_read             boolean NOT NULL DEFAULT false,
+                                        read_at             timestamptz,
+                                        created_at          timestamptz NOT NULL DEFAULT now(),
+
+                                        CONSTRAINT fk_notifications_user
+                                            FOREIGN KEY (user_id)
+                                                REFERENCES aml_task.users(id)
+                                                ON UPDATE RESTRICT
+                                                ON DELETE CASCADE,
+
+                                        CONSTRAINT chk_notifications_type_not_blank
+                                            CHECK (btrim(notification_type) <> ''),
+
+                                        CONSTRAINT chk_notifications_title_not_blank
+                                            CHECK (btrim(title) <> ''),
+
+                                        CONSTRAINT chk_notifications_payload_is_object
+                                            CHECK (jsonb_typeof(payload) = 'object'),
+
+                                        CONSTRAINT chk_notifications_read_state
+                                            CHECK (
+                                                (is_read = false AND read_at IS NULL)
+                                                    OR
+                                                (is_read = true)
+                                                )
+);
+
+
+-- ACTIVITY LOG
+-- Бизнес-события
+CREATE TABLE aml_task.activity_log (
+                                       id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                       project_id          uuid,
+                                       entity_type         varchar(50) NOT NULL,
+                                       entity_id           uuid NOT NULL,
+                                       action              varchar(50) NOT NULL,
+                                       actor_user_id       uuid,
+                                       details             jsonb NOT NULL DEFAULT '{}'::jsonb,
+                                       created_at          timestamptz NOT NULL DEFAULT now(),
+
+                                       CONSTRAINT fk_activity_log_project
+                                           FOREIGN KEY (project_id)
+                                               REFERENCES aml_task.projects(id)
+                                               ON UPDATE RESTRICT
+                                               ON DELETE SET NULL,
+
+                                       CONSTRAINT fk_activity_log_actor
+                                           FOREIGN KEY (actor_user_id)
+                                               REFERENCES aml_task.users(id)
+                                               ON UPDATE RESTRICT
+                                               ON DELETE SET NULL,
+
+                                       CONSTRAINT chk_activity_log_entity_type_not_blank
+                                           CHECK (btrim(entity_type) <> ''),
+
+                                       CONSTRAINT chk_activity_log_action_not_blank
+                                           CHECK (btrim(action) <> ''),
+
+                                       CONSTRAINT chk_activity_log_details_is_object
+                                           CHECK (jsonb_typeof(details) = 'object')
+);
+
+
+-- AUDIT LOG
+-- Технический аудит изменений
+CREATE TABLE aml_task.audit_log (
+                                    id                  bigserial PRIMARY KEY,
+                                    table_name          varchar(100) NOT NULL,
+                                    record_id           uuid NOT NULL,
+                                    operation           varchar(10) NOT NULL,
+                                    old_data            jsonb,
+                                    new_data            jsonb,
+                                    changed_by          uuid,
+                                    changed_at          timestamptz NOT NULL DEFAULT now(),
+                                    transaction_id      bigint NOT NULL DEFAULT txid_current(),
+
+                                    CONSTRAINT fk_audit_log_changed_by
+                                        FOREIGN KEY (changed_by)
+                                            REFERENCES aml_task.users(id)
+                                            ON UPDATE RESTRICT
+                                            ON DELETE SET NULL,
+
+                                    CONSTRAINT chk_audit_log_operation
+                                        CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+
+                                    CONSTRAINT chk_audit_log_table_name_not_blank
+                                        CHECK (btrim(table_name) <> '')
+);
+
+
+-- INDEXES: USERS
+CREATE INDEX ix_users_is_active
+    ON aml_task.users(is_active)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX ix_users_deleted_at
+    ON aml_task.users(deleted_at);
+
+
+-- INDEXES: USER SESSIONS
+CREATE INDEX ix_user_sessions_user_id
+    ON aml_task.user_sessions(user_id);
+
+CREATE INDEX ix_user_sessions_expires_at
+    ON aml_task.user_sessions(expires_at);
+
+CREATE INDEX ix_user_sessions_last_used_at
+    ON aml_task.user_sessions(last_used_at);
+
+CREATE INDEX ix_user_sessions_active
+    ON aml_task.user_sessions(user_id, is_revoked, expires_at);
+
+-- INDEXES: PROJECTS
+CREATE INDEX ix_projects_owner_id
+    ON aml_task.projects(owner_id);
+
+CREATE INDEX ix_projects_is_archived
+    ON aml_task.projects(is_archived)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX ix_projects_deleted_at
+    ON aml_task.projects(deleted_at);
+
+
+-- INDEXES: PROJECT MEMBERS
+CREATE INDEX ix_project_members_project_id
+    ON aml_task.project_members(project_id);
+
+CREATE INDEX ix_project_members_user_id
+    ON aml_task.project_members(user_id);
+
+CREATE INDEX ix_project_members_role
+    ON aml_task.project_members(role);
+
+
+-- INDEXES: PROJECT INVITATIONS
+CREATE INDEX ix_project_invitations_project_id
+    ON aml_task.project_invitations(project_id);
+
+CREATE INDEX ix_project_invitations_email
+    ON aml_task.project_invitations(email);
+
+CREATE INDEX ix_project_invitations_status
+    ON aml_task.project_invitations(status);
+
+CREATE INDEX ix_project_invitations_expires_at
+    ON aml_task.project_invitations(expires_at);
+
+
+-- INDEXES: STATUSES
+CREATE INDEX ix_statuses_project_id
+    ON aml_task.statuses(project_id);
+
+CREATE INDEX ix_statuses_project_category
+    ON aml_task.statuses(project_id, category);
+
+
+-- INDEXES: SPRINTS
+CREATE INDEX ix_sprints_project_id
+    ON aml_task.sprints(project_id);
+
+CREATE INDEX ix_sprints_project_status
+    ON aml_task.sprints(project_id, status);
+
+CREATE INDEX ix_sprints_dates
+    ON aml_task.sprints(project_id, start_date, end_date);
+
+
+-- INDEXES: ISSUES
+CREATE INDEX ix_issues_project_id
+    ON aml_task.issues(project_id);
+
+CREATE INDEX ix_issues_status_id
+    ON aml_task.issues(status_id);
+
+CREATE INDEX ix_issues_sprint_id
+    ON aml_task.issues(sprint_id);
+
+CREATE INDEX ix_issues_parent_issue_id
+    ON aml_task.issues(parent_issue_id);
+
+CREATE INDEX ix_issues_reporter_id
+    ON aml_task.issues(reporter_id);
+
+CREATE INDEX ix_issues_assignee_id
+    ON aml_task.issues(assignee_id);
+
+CREATE INDEX ix_issues_type_id
+    ON aml_task.issues(type_id);
+
+CREATE INDEX ix_issues_priority
+    ON aml_task.issues(priority);
+
+CREATE INDEX ix_issues_due_date
+    ON aml_task.issues(due_date);
+
+CREATE INDEX ix_issues_rank_position
+    ON aml_task.issues(project_id, rank_position)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX ix_issues_project_status_assignee
+    ON aml_task.issues(project_id, status_id, assignee_id)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX ix_issues_project_sprint_status
+    ON aml_task.issues(project_id, sprint_id, status_id)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX ix_issues_deleted_at
+    ON aml_task.issues(deleted_at);
+
+CREATE INDEX ix_issues_title_search
+    ON aml_task.issues
+        USING gin (
+                   to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(description, ''))
+            );
+
+
+-- INDEXES: ISSUE WATCHERS
+CREATE INDEX ix_issue_watchers_user_id
+    ON aml_task.issue_watchers(user_id);
+
+-- INDEXES: ISSUE STATUS HISTORY
+CREATE INDEX ix_issue_status_history_issue_id
+    ON aml_task.issue_status_history(issue_id);
+
+CREATE INDEX ix_issue_status_history_to_status_id
+    ON aml_task.issue_status_history(to_status_id);
+
+CREATE INDEX ix_issue_status_history_changed_by
+    ON aml_task.issue_status_history(changed_by);
+
+CREATE INDEX ix_issue_status_history_entered_at
+    ON aml_task.issue_status_history(entered_at);
+
+
+-- INDEXES: ISSUE RELATIONS
+CREATE INDEX ix_issue_relations_source_issue_id
+    ON aml_task.issue_relations(source_issue_id);
+
+CREATE INDEX ix_issue_relations_target_issue_id
+    ON aml_task.issue_relations(target_issue_id);
+
+CREATE INDEX ix_issue_relations_relation_type
+    ON aml_task.issue_relations(relation_type);
+
+
+-- INDEXES: COMMENTS
+CREATE INDEX ix_comments_issue_id
+    ON aml_task.comments(issue_id);
+
+CREATE INDEX ix_comments_author_id
+    ON aml_task.comments(author_id);
+
+CREATE INDEX ix_comments_deleted_at
+    ON aml_task.comments(deleted_at);
+
+
+-- INDEXES: ATTACHMENTS
+CREATE INDEX ix_attachments_issue_id
+    ON aml_task.attachments(issue_id);
+
+CREATE INDEX ix_attachments_uploaded_by
+    ON aml_task.attachments(uploaded_by);
+
+
+-- INDEXES: TIME LOGS
+CREATE INDEX ix_time_logs_issue_id
+    ON aml_task.time_logs(issue_id);
+
+CREATE INDEX ix_time_logs_user_id
+    ON aml_task.time_logs(user_id);
+
+CREATE INDEX ix_time_logs_work_date
+    ON aml_task.time_logs(work_date);
+
+
+-- INDEXES: NOTIFICATIONS
+CREATE INDEX ix_notifications_user_id
+    ON aml_task.notifications(user_id);
+
+CREATE INDEX ix_notifications_user_is_read
+    ON aml_task.notifications(user_id, is_read);
+
+CREATE INDEX ix_notifications_created_at
+    ON aml_task.notifications(created_at);
+
+
+-- INDEXES: ACTIVITY LOG
+CREATE INDEX ix_activity_log_project_id
+    ON aml_task.activity_log(project_id);
+
+CREATE INDEX ix_activity_log_entity
+    ON aml_task.activity_log(entity_type, entity_id);
+
+CREATE INDEX ix_activity_log_actor_user_id
+    ON aml_task.activity_log(actor_user_id);
+
+CREATE INDEX ix_activity_log_created_at
+    ON aml_task.activity_log(created_at);
+
+
+-- INDEXES: AUDIT LOG
+CREATE INDEX ix_audit_log_table_record
+    ON aml_task.audit_log(table_name, record_id);
+
+CREATE INDEX ix_audit_log_changed_by
+    ON aml_task.audit_log(changed_by);
+
+CREATE INDEX ix_audit_log_changed_at
+    ON aml_task.audit_log(changed_at);
+
+CREATE INDEX ix_audit_log_transaction_id
+    ON aml_task.audit_log(transaction_id);
+
+COMMIT;
+
+
+BEGIN;
+
+SET search_path TO aml_task, public;
+
+
+
+DROP TRIGGER IF EXISTS trg_users_audit ON aml_task.users;
+DROP TRIGGER IF EXISTS trg_user_sessions_audit ON aml_task.user_sessions;
+DROP TRIGGER IF EXISTS trg_projects_audit ON aml_task.projects;
+DROP TRIGGER IF EXISTS trg_project_members_audit ON aml_task.project_members;
+DROP TRIGGER IF EXISTS trg_project_invitations_audit ON aml_task.project_invitations;
+DROP TRIGGER IF EXISTS trg_statuses_audit ON aml_task.statuses;
+DROP TRIGGER IF EXISTS trg_sprints_audit ON aml_task.sprints;
+DROP TRIGGER IF EXISTS trg_issues_audit ON aml_task.issues;
+DROP TRIGGER IF EXISTS trg_issue_watchers_audit ON aml_task.issue_watchers;
+DROP TRIGGER IF EXISTS trg_issue_status_history_audit ON aml_task.issue_status_history;
+DROP TRIGGER IF EXISTS trg_issue_relations_audit ON aml_task.issue_relations;
+DROP TRIGGER IF EXISTS trg_comments_audit ON aml_task.comments;
+DROP TRIGGER IF EXISTS trg_attachments_audit ON aml_task.attachments;
+DROP TRIGGER IF EXISTS trg_time_logs_audit ON aml_task.time_logs;
+DROP TRIGGER IF EXISTS trg_notifications_audit ON aml_task.notifications;
+
+DROP FUNCTION IF EXISTS aml_task.fn_audit_trigger();
+DROP FUNCTION IF EXISTS aml_task.fn_build_record_pk(text, jsonb);
+DROP FUNCTION IF EXISTS aml_task.fn_get_current_user_id();
+DROP FUNCTION IF EXISTS aml_task.fn_increment_row_version();
+DROP FUNCTION IF EXISTS aml_task.fn_set_updated_at();
+
+DROP TABLE IF EXISTS aml_task.audit_log CASCADE;
+
+CREATE TABLE aml_task.audit_log (
+                                    id                  bigserial PRIMARY KEY,
+                                    table_name          varchar(100) NOT NULL,
+                                    operation           varchar(10) NOT NULL,
+                                    record_pk           jsonb,
+                                    old_data            jsonb,
+                                    new_data            jsonb,
+                                    changed_by          uuid,
+                                    changed_at          timestamptz NOT NULL DEFAULT now(),
+                                    transaction_id      bigint NOT NULL DEFAULT txid_current(),
+
+                                    CONSTRAINT fk_audit_log_changed_by
+                                        FOREIGN KEY (changed_by)
+                                            REFERENCES aml_task.users(id)
+                                            ON UPDATE RESTRICT
+                                            ON DELETE SET NULL,
+
+                                    CONSTRAINT chk_audit_log_operation
+                                        CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+
+                                    CONSTRAINT chk_audit_log_table_name_not_blank
+                                        CHECK (btrim(table_name) <> ''),
+
+                                    CONSTRAINT chk_audit_log_record_pk_is_object
+                                        CHECK (
+                                            record_pk IS NULL
+                                                OR jsonb_typeof(record_pk) = 'object'
+                                            )
+);
+
+CREATE INDEX ix_audit_log_table_name
+    ON aml_task.audit_log(table_name);
+
+CREATE INDEX ix_audit_log_record_pk
+    ON aml_task.audit_log
+        USING gin (record_pk);
+
+CREATE INDEX ix_audit_log_changed_by
+    ON aml_task.audit_log(changed_by);
+
+CREATE INDEX ix_audit_log_changed_at
+    ON aml_task.audit_log(changed_at);
+
+CREATE INDEX ix_audit_log_transaction_id
+    ON aml_task.audit_log(transaction_id);
+
+
+-- ФУНКЦИИ
+
+CREATE OR REPLACE FUNCTION aml_task.fn_set_updated_at()
+    RETURNS trigger
+    LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION aml_task.fn_increment_row_version()
+    RETURNS trigger
+    LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.row_version := OLD.row_version + 1;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION aml_task.fn_get_current_user_id()
+    RETURNS uuid
+    LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_user_id text;
+BEGIN
+    v_user_id := current_setting('app.current_user_id', true);
+
+    IF v_user_id IS NULL OR btrim(v_user_id) = '' THEN
+        RETURN NULL;
+    END IF;
+
+    RETURN v_user_id::uuid;
+EXCEPTION
+    WHEN others THEN
+        RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION aml_task.fn_build_record_pk(
+    p_table_name text,
+    p_row jsonb
+)
+    RETURNS jsonb
+    LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF p_row IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    IF p_row ? 'id' THEN
+        RETURN jsonb_build_object('id', p_row -> 'id');
+    END IF;
+
+    IF p_table_name = 'issue_watchers' THEN
+        RETURN jsonb_build_object(
+                'issue_id', p_row -> 'issue_id',
+                'user_id', p_row -> 'user_id'
+               );
+    ELSIF p_table_name = 'project_members' THEN
+        RETURN jsonb_build_object(
+                'project_id', p_row -> 'project_id',
+                'user_id', p_row -> 'user_id'
+               );
+    ELSIF p_table_name = 'project_invitations' THEN
+        RETURN jsonb_build_object(
+                'project_id', p_row -> 'project_id',
+                'email', p_row -> 'email'
+               );
+    ELSIF p_table_name = 'issue_status_history' THEN
+        RETURN jsonb_build_object(
+                'issue_id', p_row -> 'issue_id',
+                'entered_at', p_row -> 'entered_at'
+               );
+    END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION aml_task.fn_audit_trigger()
+    RETURNS trigger
+    LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_changed_by uuid;
+    v_old_data jsonb;
+    v_new_data jsonb;
+    v_record_pk jsonb;
+BEGIN
+    v_changed_by := aml_task.fn_get_current_user_id();
+
+    IF TG_OP = 'INSERT' THEN
+        v_old_data := NULL;
+        v_new_data := to_jsonb(NEW);
+        v_record_pk := aml_task.fn_build_record_pk(TG_TABLE_NAME, v_new_data);
+
+        INSERT INTO aml_task.audit_log (
+            table_name,
+            operation,
+            record_pk,
+            old_data,
+            new_data,
+            changed_by,
+            changed_at
+        )
+        VALUES (
+                   TG_TABLE_NAME,
+                   'INSERT',
+                   v_record_pk,
+                   v_old_data,
+                   v_new_data,
+                   v_changed_by,
+                   now()
+               );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        v_old_data := to_jsonb(OLD);
+        v_new_data := to_jsonb(NEW);
+        v_record_pk := aml_task.fn_build_record_pk(TG_TABLE_NAME, v_new_data);
+
+        INSERT INTO aml_task.audit_log (
+            table_name,
+            operation,
+            record_pk,
+            old_data,
+            new_data,
+            changed_by,
+            changed_at
+        )
+        VALUES (
+                   TG_TABLE_NAME,
+                   'UPDATE',
+                   v_record_pk,
+                   v_old_data,
+                   v_new_data,
+                   v_changed_by,
+                   now()
+               );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        v_old_data := to_jsonb(OLD);
+        v_new_data := NULL;
+        v_record_pk := aml_task.fn_build_record_pk(TG_TABLE_NAME, v_old_data);
+
+        INSERT INTO aml_task.audit_log (
+            table_name,
+            operation,
+            record_pk,
+            old_data,
+            new_data,
+            changed_by,
+            changed_at
+        )
+        VALUES (
+                   TG_TABLE_NAME,
+                   'DELETE',
+                   v_record_pk,
+                   v_old_data,
+                   v_new_data,
+                   v_changed_by,
+                   now()
+               );
+
+        RETURN OLD;
+    END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+
+-- ТРИГГЕРЫ updated_at
+
+DROP TRIGGER IF EXISTS trg_users_set_updated_at ON aml_task.users;
+CREATE TRIGGER trg_users_set_updated_at
+    BEFORE UPDATE ON aml_task.users
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_user_sessions_set_updated_at ON aml_task.user_sessions;
+CREATE TRIGGER trg_user_sessions_set_updated_at
+    BEFORE UPDATE ON aml_task.user_sessions
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_projects_set_updated_at ON aml_task.projects;
+CREATE TRIGGER trg_projects_set_updated_at
+    BEFORE UPDATE ON aml_task.projects
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_statuses_set_updated_at ON aml_task.statuses;
+CREATE TRIGGER trg_statuses_set_updated_at
+    BEFORE UPDATE ON aml_task.statuses
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_sprints_set_updated_at ON aml_task.sprints;
+CREATE TRIGGER trg_sprints_set_updated_at
+    BEFORE UPDATE ON aml_task.sprints
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_issues_set_updated_at ON aml_task.issues;
+CREATE TRIGGER trg_issues_set_updated_at
+    BEFORE UPDATE ON aml_task.issues
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_comments_set_updated_at ON aml_task.comments;
+CREATE TRIGGER trg_comments_set_updated_at
+    BEFORE UPDATE ON aml_task.comments
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_set_updated_at();
+
+
+
+-- ТРИГГЕРЫ row_version
+DROP TRIGGER IF EXISTS trg_users_increment_row_version ON aml_task.users;
+CREATE TRIGGER trg_users_increment_row_version
+    BEFORE UPDATE ON aml_task.users
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_increment_row_version();
+
+DROP TRIGGER IF EXISTS trg_projects_increment_row_version ON aml_task.projects;
+CREATE TRIGGER trg_projects_increment_row_version
+    BEFORE UPDATE ON aml_task.projects
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_increment_row_version();
+
+DROP TRIGGER IF EXISTS trg_statuses_increment_row_version ON aml_task.statuses;
+CREATE TRIGGER trg_statuses_increment_row_version
+    BEFORE UPDATE ON aml_task.statuses
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_increment_row_version();
+
+DROP TRIGGER IF EXISTS trg_sprints_increment_row_version ON aml_task.sprints;
+CREATE TRIGGER trg_sprints_increment_row_version
+    BEFORE UPDATE ON aml_task.sprints
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_increment_row_version();
+
+DROP TRIGGER IF EXISTS trg_issues_increment_row_version ON aml_task.issues;
+CREATE TRIGGER trg_issues_increment_row_version
+    BEFORE UPDATE ON aml_task.issues
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_increment_row_version();
+
+DROP TRIGGER IF EXISTS trg_comments_increment_row_version ON aml_task.comments;
+CREATE TRIGGER trg_comments_increment_row_version
+    BEFORE UPDATE ON aml_task.comments
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_increment_row_version();
+
+
+-- ТРИГГЕРЫ AUDIT
+
+CREATE TRIGGER trg_users_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.users
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_user_sessions_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.user_sessions
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_projects_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.projects
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_project_members_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.project_members
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_project_invitations_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.project_invitations
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_statuses_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.statuses
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_sprints_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.sprints
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_issues_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.issues
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_issue_watchers_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.issue_watchers
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_issue_status_history_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.issue_status_history
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_issue_relations_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.issue_relations
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_comments_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.comments
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_attachments_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.attachments
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_time_logs_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.time_logs
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+CREATE TRIGGER trg_notifications_audit
+    AFTER INSERT OR UPDATE OR DELETE ON aml_task.notifications
+    FOR EACH ROW
+EXECUTE FUNCTION aml_task.fn_audit_trigger();
+
+
+
+
+-- СТАРТОВЫЕ ДАННЫЕ
+
+INSERT INTO aml_task.issue_types (code, name, description, icon, is_subtask_allowed)
+VALUES
+    ('task', 'Task', 'Стандартная рабочая задача', 'task', true),
+    ('bug', 'Bug', 'Ошибка или дефект системы', 'bug_report', false),
+    ('story', 'Story', 'Пользовательская история', 'menu_book', true),
+    ('epic', 'Epic', 'Крупная бизнес-инициатива', 'bolt', true),
+    ('subtask', 'Subtask', 'Подзадача', 'subdirectory_arrow_right', false)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO aml_task.users (
+    id,
+    email,
+    password_hash,
+    first_name,
+    last_name,
+    avatar_url,
+    settings,
+    is_active
+)
+VALUES
+    (
+        '11111111-1111-1111-1111-111111111111',
+        'admin@aml-task.local',
+        '$2b$12$demo_admin_hash',
+        'Иван',
+        'Петров',
+        NULL,
+        '{
+          "theme": "dark",
+          "language": "ru",
+          "timezone": "Europe/Amsterdam",
+          "notifications": {
+            "email": true,
+            "push": true
+          }
+        }'::jsonb,
+        true
+    ),
+    (
+        '22222222-2222-2222-2222-222222222222',
+        'manager@aml-task.local',
+        '$2b$12$demo_manager_hash',
+        'Анна',
+        'Смирнова',
+        NULL,
+        '{
+          "theme": "light",
+          "language": "ru",
+          "timezone": "Europe/Amsterdam",
+          "notifications": {
+            "email": true,
+            "push": false
+          }
+        }'::jsonb,
+        true
+    ),
+    (
+        '33333333-3333-3333-3333-333333333333',
+        'employee@aml-task.local',
+        '$2b$12$demo_employee_hash',
+        'Дмитрий',
+        'Кузнецов',
+        NULL,
+        '{
+          "theme": "dark",
+          "language": "ru",
+          "timezone": "Europe/Amsterdam",
+          "notifications": {
+            "email": false,
+            "push": true
+          }
+        }'::jsonb,
+        true
+    )
+ON CONFLICT (email) DO NOTHING;
+
+SELECT set_config('app.current_user_id', '11111111-1111-1111-1111-111111111111', false);
+
+INSERT INTO aml_task.projects (
+    id,
+    name,
+    project_key,
+    description,
+    owner_id,
+    is_archived
+)
+VALUES
+    (
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'AML Task',
+        'AMLTASK',
+        'Система управления задачами предприятия с поддержкой аудита, версионирования и аналитики.',
+        '11111111-1111-1111-1111-111111111111',
+        false
+    )
+ON CONFLICT (project_key) DO NOTHING;
+
+INSERT INTO aml_task.project_members (
+    id,
+    project_id,
+    user_id,
+    role,
+    is_active
+)
+VALUES
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        '11111111-1111-1111-1111-111111111111',
+        'owner',
+        true
+    ),
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        '22222222-2222-2222-2222-222222222222',
+        'admin',
+        true
+    ),
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        '33333333-3333-3333-3333-333333333333',
+        'member',
+        true
+    )
+ON CONFLICT (project_id, user_id) DO NOTHING;
+
+INSERT INTO aml_task.statuses (
+    id,
+    project_id,
+    name,
+    category,
+    position,
+    color,
+    is_default,
+    is_final
+)
+VALUES
+    (
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'To Do',
+        'todo',
+        1,
+        'gray',
+        true,
+        false
+    ),
+    (
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'In Progress',
+        'in_progress',
+        2,
+        'blue',
+        false,
+        false
+    ),
+    (
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb003',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'Code Review',
+        'in_progress',
+        3,
+        'purple',
+        false,
+        false
+    ),
+    (
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb004',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'Done',
+        'done',
+        4,
+        'green',
+        false,
+        true
+    )
+ON CONFLICT (project_id, name) DO NOTHING;
+
+INSERT INTO aml_task.sprints (
+    id,
+    project_id,
+    name,
+    goal,
+    status,
+    start_date,
+    end_date
+)
+VALUES
+    (
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'Sprint 1',
+        'Реализовать базовую модель данных и механизм аудита.',
+        'active',
+        CURRENT_DATE,
+        CURRENT_DATE + 14
+    )
+ON CONFLICT (project_id, name) DO NOTHING;
+
+INSERT INTO aml_task.issues (
+    id,
+    project_id,
+    issue_number,
+    type_id,
+    status_id,
+    sprint_id,
+    parent_issue_id,
+    title,
+    description,
+    reporter_id,
+    assignee_id,
+    priority,
+    story_points,
+    due_date,
+    rank_position,
+    original_estimate_minutes,
+    remaining_estimate_minutes
+)
+VALUES
+    (
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        1,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'epic'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002',
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        NULL,
+        'Проектирование базы данных AML Task',
+        'Создать логическую и физическую модель данных, включающую пользователей, проекты, задачи, аудит и сессии.',
+        '22222222-2222-2222-2222-222222222222',
+        '33333333-3333-3333-3333-333333333333',
+        'highest',
+        13,
+        CURRENT_DATE + 7,
+        1000,
+        960,
+        480
+    ),
+    (
+        'dddddddd-dddd-dddd-dddd-dddddddddd02',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        2,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'task'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001',
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        'Создать таблицу user_sessions',
+        'Добавить хранение refresh token hash, срока действия сессии и признака отзыва.',
+        '22222222-2222-2222-2222-222222222222',
+        '33333333-3333-3333-3333-333333333333',
+        'high',
+        5,
+        CURRENT_DATE + 3,
+        2000,
+        240,
+        240
+    ),
+    (
+        'dddddddd-dddd-dddd-dddd-dddddddddd03',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        3,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'bug'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb003',
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        NULL,
+        'Исправить конфликт схемы при создании внешних ключей',
+        'Проверить порядок создания таблиц и явное указание схемы aml_task в ссылках.',
+        '11111111-1111-1111-1111-111111111111',
+        '22222222-2222-2222-2222-222222222222',
+        'critical',
+        3,
+        CURRENT_DATE + 1,
+        3000,
+        120,
+        60
+    )
+ON CONFLICT (project_id, issue_number) DO NOTHING;
+
+INSERT INTO aml_task.issue_status_history (
+    id,
+    issue_id,
+    from_status_id,
+    to_status_id,
+    changed_by,
+    entered_at,
+    comment
+)
+VALUES
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        NULL,
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002',
+        '22222222-2222-2222-2222-222222222222',
+        now(),
+        'Задача сразу переведена в работу.'
+    ),
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd02',
+        NULL,
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001',
+        '22222222-2222-2222-2222-222222222222',
+        now(),
+        'Новая задача в бэклоге.'
+    ),
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd03',
+        NULL,
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb003',
+        '11111111-1111-1111-1111-111111111111',
+        now(),
+        'Ошибка уже находится на проверке.'
+    );
+
+INSERT INTO aml_task.issue_watchers (
+    issue_id,
+    user_id
+)
+VALUES
+    ('dddddddd-dddd-dddd-dddd-dddddddddd01', '11111111-1111-1111-1111-111111111111'),
+    ('dddddddd-dddd-dddd-dddd-dddddddddd01', '22222222-2222-2222-2222-222222222222'),
+    ('dddddddd-dddd-dddd-dddd-dddddddddd02', '22222222-2222-2222-2222-222222222222')
+ON CONFLICT (issue_id, user_id) DO NOTHING;
+
+INSERT INTO aml_task.comments (
+    id,
+    issue_id,
+    author_id,
+    content
+)
+VALUES
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        '22222222-2222-2222-2222-222222222222',
+        'Нужно подготовить SQL-скрипт так, чтобы его можно было запускать целиком с нуля.'
+    ),
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd02',
+        '33333333-3333-3333-3333-333333333333',
+        'Таблица user_sessions будет использоваться для хранения refresh token hash.'
+    );
+
+INSERT INTO aml_task.notifications (
+    id,
+    user_id,
+    notification_type,
+    title,
+    payload,
+    is_read
+)
+VALUES
+    (
+        gen_random_uuid(),
+        '33333333-3333-3333-3333-333333333333',
+        'task_assigned',
+        'Вам назначена задача AMLTASK-2',
+        '{
+          "issue_id": "dddddddd-dddd-dddd-dddd-dddddddddd02",
+          "project_key": "AMLTASK",
+          "issue_number": 2
+        }'::jsonb,
+        false
+    ),
+    (
+        gen_random_uuid(),
+        '22222222-2222-2222-2222-222222222222',
+        'comment_added',
+        'Добавлен комментарий к задаче AMLTASK-1',
+        '{
+          "issue_id": "dddddddd-dddd-dddd-dddd-dddddddddd01",
+          "project_key": "AMLTASK",
+          "issue_number": 1
+        }'::jsonb,
+        false
+    );
+
+INSERT INTO aml_task.user_sessions (
+    id,
+    user_id,
+    refresh_token_hash,
+    device_info,
+    ip_address,
+    user_agent,
+    is_revoked,
+    expires_at,
+    last_used_at
+)
+VALUES
+    (
+        gen_random_uuid(),
+        '11111111-1111-1111-1111-111111111111',
+        'demo_refresh_hash_admin_001',
+        'Windows 11 / Chrome',
+        '192.168.1.10',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0',
+        false,
+        now() + interval '30 days',
+        now()
+    ),
+    (
+        gen_random_uuid(),
+        '33333333-3333-3333-3333-333333333333',
+        'demo_refresh_hash_employee_001',
+        'Android / Mobile App',
+        '192.168.1.20',
+        'AMLTaskMobile/1.0 Android',
+        false,
+        now() + interval '30 days',
+        now()
+    )
+ON CONFLICT (refresh_token_hash) DO NOTHING;
+
+INSERT INTO aml_task.activity_log (
+    id,
+    project_id,
+    entity_type,
+    entity_id,
+    action,
+    actor_user_id,
+    details
+)
+VALUES
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'project',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'project_created',
+        '11111111-1111-1111-1111-111111111111',
+        '{"name": "AML Task"}'::jsonb
+    ),
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'issue',
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        'issue_created',
+        '22222222-2222-2222-2222-222222222222',
+        '{"issue_number": 1, "title": "Проектирование базы данных AML Task"}'::jsonb
+    ),
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'issue',
+        'dddddddd-dddd-dddd-dddd-dddddddddd03',
+        'status_changed',
+        '11111111-1111-1111-1111-111111111111',
+        '{"from": null, "to": "Code Review"}'::jsonb
+    );
+
+COMMIT;
+
+INSERT INTO aml_task.issues (
+    id,
+    project_id,
+    issue_number,
+    type_id,
+    status_id,
+    sprint_id,
+    parent_issue_id,
+    title,
+    description,
+    reporter_id,
+    assignee_id,
+    priority,
+    story_points,
+    due_date,
+    rank_position,
+    original_estimate_minutes,
+    remaining_estimate_minutes
+)
+VALUES
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        4,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'task'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001', -- To Do
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        NULL,
+        'Подготовить отчёт по просроченным задачам',
+        'Нужно сформировать аналитический отчёт по всем просроченным задачам проекта.',
+        '22222222-2222-2222-2222-222222222222',
+        '33333333-3333-3333-3333-333333333333',
+        'high',
+        3,
+        CURRENT_DATE - 10,
+        4000,
+        180,
+        120
+    ),
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        5,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'bug'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002', -- In Progress
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        NULL,
+        'Исправить ошибку авторизации по refresh token',
+        'При обновлении токена возникает ошибка проверки сессии.',
+        '11111111-1111-1111-1111-111111111111',
+        '22222222-2222-2222-2222-222222222222',
+        'critical',
+        5,
+        CURRENT_DATE - 5,
+        5000,
+        240,
+        90
+    ),
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        6,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'story'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb003', -- Code Review, category = in_progress
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        NULL,
+        'Реализовать экран аналитики задач',
+        'Нужно подготовить экран с визуализацией просроченных и активных задач.',
+        '22222222-2222-2222-2222-222222222222',
+        '33333333-3333-3333-3333-333333333333',
+        'medium',
+        8,
+        CURRENT_DATE - 2,
+        6000,
+        480,
+        240
+    )
+ON CONFLICT (project_id, issue_number) DO NOTHING;
+
+INSERT INTO aml_task.time_logs (
+    id,
+    issue_id,
+    user_id,
+    time_spent_minutes,
+    work_date,
+    created_at
+)
+VALUES
+    -- Задача 1 (эпик)
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        '33333333-3333-3333-3333-333333333333',
+        120,
+        CURRENT_DATE - 10,
+        now()
+    ),
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        '22222222-2222-2222-2222-222222222222',
+        180,
+        CURRENT_DATE - 9,
+        now()
+    ),
+
+    -- Задача 2 (task)
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd02',
+        '33333333-3333-3333-3333-333333333333',
+        60,
+        CURRENT_DATE - 5,
+        now()
+    ),
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd02',
+        '33333333-3333-3333-3333-333333333333',
+        90,
+        CURRENT_DATE - 4,
+        now()
+    ),
+
+    -- Задача 3 (bug)
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd03',
+        '22222222-2222-2222-2222-222222222222',
+        45,
+        CURRENT_DATE - 2,
+        now()
+    ),
+
+    -- Новые задачи (просроченные)
+    (
+        gen_random_uuid(),
+        (SELECT id FROM aml_task.issues WHERE issue_number = 4 LIMIT 1),
+        '33333333-3333-3333-3333-333333333333',
+        200,
+        CURRENT_DATE - 8,
+        now()
+    ),
+    (
+        gen_random_uuid(),
+        (SELECT id FROM aml_task.issues WHERE issue_number = 5 LIMIT 1),
+        '22222222-2222-2222-2222-222222222222',
+        150,
+        CURRENT_DATE - 6,
+        now()
+    ),
+    (
+        gen_random_uuid(),
+        (SELECT id FROM aml_task.issues WHERE issue_number = 6 LIMIT 1),
+        '33333333-3333-3333-3333-333333333333',
+        300,
+        CURRENT_DATE - 3,
+        now()
+    );
+
+DELETE FROM aml_task.issue_status_history
+WHERE issue_id = 'dddddddd-dddd-dddd-dddd-dddddddddd01';
+
+INSERT INTO aml_task.issue_status_history (
+    id,
+    issue_id,
+    from_status_id,
+    to_status_id,
+    changed_by,
+    entered_at,
+    left_at,
+    comment
+)
+VALUES
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        NULL,
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001', -- To Do
+        '22222222-2222-2222-2222-222222222222',
+        now() - interval '8 days',
+        now() - interval '6 days',
+        'Задача создана и помещена в бэклог.'
+    ),
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001', -- To Do
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002', -- In Progress
+        '33333333-3333-3333-3333-333333333333',
+        now() - interval '6 days',
+        now() - interval '3 days',
+        'Исполнитель приступил к работе над задачей.'
+    ),
+    (
+        gen_random_uuid(),
+        'dddddddd-dddd-dddd-dddd-dddddddddd01',
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002', -- In Progress
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb003', -- Code Review
+        '33333333-3333-3333-3333-333333333333',
+        now() - interval '3 days',
+        NULL,
+        'Основная реализация завершена, задача передана на проверку.'
+    );
+
+INSERT INTO aml_task.issues (
+    id,
+    project_id,
+    issue_number,
+    type_id,
+    status_id,
+    sprint_id,
+    parent_issue_id,
+    title,
+    description,
+    reporter_id,
+    assignee_id,
+    priority,
+    story_points,
+    due_date,
+    rank_position,
+    original_estimate_minutes,
+    remaining_estimate_minutes
+)
+VALUES
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        7,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'subtask'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001', -- To Do
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        'dddddddd-dddd-dddd-dddd-dddddddddd01', -- parent AMLTASK-1
+        'Подготовить ER-диаграмму',
+        'Нужно детализировать сущности и связи для основной модели данных.',
+        '22222222-2222-2222-2222-222222222222',
+        '33333333-3333-3333-3333-333333333333',
+        'medium',
+        2,
+        CURRENT_DATE + 2,
+        7000,
+        120,
+        120
+    ),
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        8,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'subtask'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002', -- In Progress
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        'dddddddd-dddd-dddd-dddd-dddddddddd01', -- parent AMLTASK-1
+        'Описать ограничения целостности',
+        'Нужно подготовить список ограничений, внешних ключей и check-условий.',
+        '22222222-2222-2222-2222-222222222222',
+        '22222222-2222-2222-2222-222222222222',
+        'high',
+        3,
+        CURRENT_DATE + 4,
+        8000,
+        180,
+        90
+    ),
+    (
+        gen_random_uuid(),
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        9,
+        (SELECT id FROM aml_task.issue_types WHERE code = 'subtask'),
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb003', -- Code Review
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        'dddddddd-dddd-dddd-dddd-dddddddddd01', -- parent AMLTASK-1
+        'Подготовить триггеры аудита',
+        'Нужно реализовать автоматическую запись изменений в журнал аудита.',
+        '11111111-1111-1111-1111-111111111111',
+        '33333333-3333-3333-3333-333333333333',
+        'high',
+        5,
+        CURRENT_DATE + 5,
+        9000,
+        240,
+        120
+    )
+ON CONFLICT (project_id, issue_number) DO NOTHING;
+
+UPDATE aml_task.issue_types SET name = 'Задача' WHERE code = 'task';
+UPDATE aml_task.issue_types SET name = 'Ошибка' WHERE code = 'bug';
+UPDATE aml_task.issue_types SET name = 'История' WHERE code = 'story';
+UPDATE aml_task.issue_types SET name = 'Эпик' WHERE code = 'epic';
+UPDATE aml_task.issue_types SET name = 'Подзадача' WHERE code = 'subtask';
+
+
+UPDATE aml_task.projects
+SET description = 'Проверка updated_at, row_version и audit №2'
+WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+
+SELECT id, description, updated_at, row_version
+FROM aml_task.projects
+WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+SELECT table_name, operation, record_pk, changed_at
+FROM aml_task.audit_log
+ORDER BY id DESC
+LIMIT 10;
+
+-- показывает основные данные по задачам внутри проекта
+SELECT
+    p.project_key || '-' || i.issue_number AS issue_code,
+    i.title,
+    it.name AS issue_type,
+    s.name AS status,
+    i.priority,
+    u.full_name AS assignee,
+    i.created_at,
+    i.due_date
+FROM aml_task.issues i
+         JOIN aml_task.projects p ON p.id = i.project_id
+         JOIN aml_task.issue_types it ON it.id = i.type_id
+         JOIN aml_task.statuses s ON s.id = i.status_id
+         LEFT JOIN aml_task.users u ON u.id = i.assignee_id
+WHERE i.deleted_at IS NULL
+  AND p.project_key = 'AMLTASK'
+ORDER BY i.issue_number;
+
+-- количество задач по статусам
+SELECT
+    s.name AS status,
+    COUNT(i.id) AS task_count
+FROM aml_task.statuses s
+         LEFT JOIN aml_task.issues i
+                   ON i.status_id = s.id
+                       AND i.deleted_at IS NULL
+WHERE s.project_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+GROUP BY s.name, s.position
+ORDER BY s.position;
+
+-- нагрузка на сотрудников
+SELECT
+    COALESCE(u.full_name, 'Не назначено') AS assignee,
+    COUNT(i.id) AS task_count
+FROM aml_task.issues i
+         LEFT JOIN aml_task.users u ON u.id = i.assignee_id
+WHERE i.deleted_at IS NULL
+GROUP BY COALESCE(u.full_name, 'Не назначено')
+ORDER BY task_count DESC, assignee;
+
+--количество задач по приоритетам
+SELECT
+    i.priority,
+    COUNT(*) AS task_count
+FROM aml_task.issues i
+WHERE i.deleted_at IS NULL
+GROUP BY i.priority
+ORDER BY task_count DESC;
+
+-- просроченные задачи
+SELECT
+    p.project_key || '-' || i.issue_number AS issue_code,
+    i.title,
+    s.name AS status,
+    u.full_name AS assignee,
+    i.due_date,
+    CURRENT_DATE - i.due_date AS days_overdue
+FROM aml_task.issues i
+         JOIN aml_task.projects p ON p.id = i.project_id
+         JOIN aml_task.statuses s ON s.id = i.status_id
+         LEFT JOIN aml_task.users u ON u.id = i.assignee_id
+WHERE i.deleted_at IS NULL
+  AND i.due_date IS NOT NULL
+  AND i.due_date < CURRENT_DATE
+  AND s.category <> 'done'
+ORDER BY days_overdue DESC, i.due_date;
+
+-- задачи активного спринта
+SELECT
+    sp.name AS sprint_name,
+    p.project_key || '-' || i.issue_number AS issue_code,
+    i.title,
+    s.name AS status,
+    i.priority,
+    u.full_name AS assignee
+FROM aml_task.issues i
+         JOIN aml_task.sprints sp ON sp.id = i.sprint_id
+         JOIN aml_task.projects p ON p.id = i.project_id
+         JOIN aml_task.statuses s ON s.id = i.status_id
+         LEFT JOIN aml_task.users u ON u.id = i.assignee_id
+WHERE i.deleted_at IS NULL
+  AND sp.status = 'active'
+ORDER BY s.position, i.priority;
+
+-- задачи по спринтам
+SELECT
+    sp.name AS sprint_name,
+    COUNT(i.id) AS task_count
+FROM aml_task.sprints sp
+         LEFT JOIN aml_task.issues i
+                   ON i.sprint_id = sp.id
+                       AND i.deleted_at IS NULL
+GROUP BY sp.name, sp.start_date
+ORDER BY sp.start_date NULLS LAST, sp.name;
+
+-- затраченное время на задачи
+SELECT
+    p.project_key || '-' || i.issue_number AS issue_code,
+    i.title,
+    COALESCE(SUM(tl.time_spent_minutes), 0) AS total_minutes,
+    ROUND(COALESCE(SUM(tl.time_spent_minutes), 0) / 60.0, 2) AS total_hours
+FROM aml_task.issues i
+         JOIN aml_task.projects p ON p.id = i.project_id
+         LEFT JOIN aml_task.time_logs tl ON tl.issue_id = i.id
+WHERE i.deleted_at IS NULL
+GROUP BY p.project_key, i.issue_number, i.title
+ORDER BY total_minutes DESC, issue_code;
+
+-- время, которые потратил пользователь
+SELECT
+    u.full_name,
+    COALESCE(SUM(tl.time_spent_minutes), 0) AS total_minutes,
+    ROUND(COALESCE(SUM(tl.time_spent_minutes), 0) / 60.0, 2) AS total_hours
+FROM aml_task.users u
+         LEFT JOIN aml_task.time_logs tl ON tl.user_id = u.id
+WHERE u.deleted_at IS NULL
+GROUP BY u.full_name
+ORDER BY total_minutes DESC, u.full_name;
+
+
+-- история смены статусов по задаче
+SELECT
+    p.project_key || '-' || i.issue_number AS issue_code,
+    fs.name AS from_status,
+    ts.name AS to_status,
+    u.full_name AS changed_by,
+    ish.entered_at,
+    ish.left_at,
+    ish.comment
+FROM aml_task.issue_status_history ish
+         JOIN aml_task.issues i ON i.id = ish.issue_id
+         JOIN aml_task.projects p ON p.id = i.project_id
+         LEFT JOIN aml_task.statuses fs ON fs.id = ish.from_status_id
+         JOIN aml_task.statuses ts ON ts.id = ish.to_status_id
+         JOIN aml_task.users u ON u.id = ish.changed_by
+WHERE p.project_key = 'AMLTASK'
+  AND i.issue_number = 1
+ORDER BY ish.entered_at;
+
+-- аудит одной задачи
+SELECT
+    al.id,
+    al.operation,
+    al.record_pk,
+    al.changed_by,
+    u.full_name AS changed_by_name,
+    al.changed_at,
+    al.old_data,
+    al.new_data
+FROM aml_task.audit_log al
+         LEFT JOIN aml_task.users u ON u.id = al.changed_by
+WHERE al.table_name = 'issues'
+  AND al.record_pk @> '{"id": "dddddddd-dddd-dddd-dddd-dddddddddd01"}'::jsonb
+ORDER BY al.changed_at DESC;
+
+-- последние действия в системе
+SELECT
+    al.entity_type,
+    al.action,
+    u.full_name AS actor,
+    al.created_at,
+    al.details
+FROM aml_task.activity_log al
+         LEFT JOIN aml_task.users u ON u.id = al.actor_user_id
+ORDER BY al.created_at DESC
+LIMIT 20;
+
+-- активные сессии пользователя
+SELECT
+    u.full_name,
+    us.device_info,
+    us.ip_address,
+    us.user_agent,
+    us.last_used_at,
+    us.expires_at
+FROM aml_task.user_sessions us
+         JOIN aml_task.users u ON u.id = us.user_id
+WHERE us.is_revoked = false
+  AND us.expires_at > now()
+ORDER BY us.last_used_at DESC NULLS LAST;
+
+-- количество активных сессий по пользователям
+SELECT
+    u.full_name,
+    COUNT(us.id) AS active_sessions
+FROM aml_task.users u
+         LEFT JOIN aml_task.user_sessions us
+                   ON us.user_id = u.id
+                       AND us.is_revoked = false
+                       AND us.expires_at > now()
+GROUP BY u.full_name
+ORDER BY active_sessions DESC, u.full_name;
+
+-- непрочитанные уведомления пользователя
+SELECT
+    u.full_name,
+    COUNT(n.id) AS unread_notifications
+FROM aml_task.users u
+         LEFT JOIN aml_task.notifications n
+                   ON n.user_id = u.id
+                       AND n.is_read = false
+GROUP BY u.full_name
+ORDER BY unread_notifications DESC, u.full_name;
+
+-- подзадачи и их родительские задачи
+SELECT
+    p.project_key || '-' || parent.issue_number AS parent_issue_code,
+    parent.title AS parent_title,
+    p.project_key || '-' || child.issue_number AS child_issue_code,
+    child.title AS child_title
+FROM aml_task.issues child
+         JOIN aml_task.issues parent ON parent.id = child.parent_issue_id
+         JOIN aml_task.projects p ON p.id = child.project_id
+WHERE child.deleted_at IS NULL
+ORDER BY parent.issue_number, child.issue_number;
+
+-- количество комментариев по задачам
+SELECT
+    p.project_key || '-' || i.issue_number AS issue_code,
+    i.title,
+    COUNT(c.id) AS comments_count
+FROM aml_task.issues i
+         JOIN aml_task.projects p ON p.id = i.project_id
+         LEFT JOIN aml_task.comments c
+                   ON c.issue_id = i.id
+                       AND c.deleted_at IS NULL
+WHERE i.deleted_at IS NULL
+GROUP BY p.project_key, i.issue_number, i.title
+ORDER BY comments_count DESC, issue_code;
+
+
+
+
+
+
+
+
