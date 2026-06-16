@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { enhanceOpenApiForFrontend } from './openapi-frontend-docs';
 
 function buildRedocHtml() {
   return `<!doctype html>
@@ -75,7 +76,7 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('AML-task API')
-    .setDescription('API documentation')
+    .setDescription('Документация REST API для frontend-разработки AML-task.')
     .setVersion('1.0')
     .addBearerAuth(
       {
@@ -90,7 +91,11 @@ async function bootstrap() {
     )
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = enhanceOpenApiForFrontend(
+    SwaggerModule.createDocument(app, config, {
+      operationIdFactory: (_controllerKey, methodKey) => methodKey,
+    }),
+  );
   SwaggerModule.setup('api/docs', app, document, {
     jsonDocumentUrl: 'api/docs-json',
   });
